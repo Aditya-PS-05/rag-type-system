@@ -1,0 +1,39 @@
+title V2 - Grounding guardrails
+direction right
+colorMode bold
+styleMode shadow
+
+Postgres pgvector [shape: cylinder, icon: database, color: blue]
+
+Query path [color: purple] {
+  User [icon: user]
+  Query embedder [icon: cpu]
+  Top-6 cosine search [icon: search]
+  Relevance gate [shape: diamond, icon: filter, color: orange]
+  Refuse without LLM [icon: x-octagon, color: red]
+  Strict prompt temp 0 [icon: file-text]
+  LLM qwen3-4b-instruct [icon: message-circle]
+}
+
+Checks [color: orange] {
+  Citation check [icon: check-square]
+  Optional LLM fact check [icon: shield]
+  Warnings shown to user [icon: alert-triangle]
+}
+
+Evaluation [color: gray] {
+  Eval set facts images traps [icon: clipboard]
+}
+
+User > Query embedder: question
+Query embedder > Top-6 cosine search
+Top-6 cosine search <> Postgres pgvector
+Top-6 cosine search > Relevance gate
+Relevance gate > Refuse without LLM: best score below 0.68
+Relevance gate > Strict prompt temp 0: relevant
+Strict prompt temp 0 > LLM qwen3-4b-instruct
+LLM qwen3-4b-instruct > Citation check: answer
+Citation check > Optional LLM fact check: verify flag
+Optional LLM fact check > Warnings shown to user
+Citation check > User: answer + sources
+Eval set facts images traps > Relevance gate: calibrates threshold

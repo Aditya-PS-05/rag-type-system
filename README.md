@@ -9,7 +9,8 @@ data/raw/ (txt, pdf, jpg + manifest.jsonl)
    ▼
 Postgres + pgvector (documents, chunks, HNSW index)
    ▲
-   │  rag.chat: embed question → vector search → prompt → qwen3:4b-instruct
+   │  rag.chat: rewrite follow-up → vector + keyword search → rerank → gate
+   │            → select evidence sentences → answer from quotes → fact-check → remove unsupported
 you
 ```
 
@@ -34,25 +35,31 @@ uv run python -m rag.ingest data/raw              # unchanged documents are skip
 uv run python -m rag.chat                         # interactive chat
 uv run python -m rag.chat -q "What does PIXL do?" # one-shot
 uv run python -m rag.chat --type image            # search only images (or text, pdf)
-uv run python -m rag.chat --verify                # fact-check every answer (about 2x slower)
-uv run python -m rag.eval [--verify]              # grounding evaluation (evals/cases.jsonl)
+uv run python -m rag.chat --show-evidence         # also print the quotes each answer was built from
+uv run python -m rag.chat --fast                  # stream answers, skip claim fact-checking
+uv run python -m rag.eval [--fast]                # grounding evaluation (evals/cases.jsonl)
 uv run pytest                                     # tests (store tests need the database running)
 ```
 
-In the chat: `/sources` lists indexed documents, `/verify` toggles fact-checking, `/help` shows commands.
+In the chat: `/sources` lists indexed documents, `/strict` toggles fact-checking, `/evidence` toggles quotes, `/help` shows commands.
+
+The first run downloads the reranker (~150 MB) into `models/`; after that everything works offline.
 
 ## Keeping answers grounded in the documents
 
-| Layer | Where | What it does |
+| Step | Where | What it does |
 |---|---|---|
-| Relevance gate | `rag/qa.py` | If no retrieved chunk scores ≥ `RAG_MIN_SCORE` (0.68), the bot refuses **without calling the LLM**. |
-| Grounding prompt | `rag/qa.py` | Sources only, a citation on every factual sentence, a fixed refusal sentence, temperature 0. |
-| Citation check | `rag/grounding.py` | Flags sentences without a citation or citing a source number that doesn't exist. Always on. |
-| Fact check | `rag/grounding.py` | `--verify`: the LLM judges each cited sentence against only its cited chunks and flags unsupported claims. Strict: true facts whose evidence sits in a chunk the sentence doesn't cite are flagged too. |
-| Evaluation | `rag/eval.py` | Answerable questions with expected answers, image questions, and trap questions (general knowledge not in the corpus) that must be refused. Re-run after changing the model, prompt, chunking or threshold. |
+| Follow-up rewriting | `rag/qa.py` | "When did it launch?" becomes a standalone question before searching; chat history is never used as a source. |
+| Hybrid retrieval | `rag/retrieval.py` | Vector search + Postgres full-text search, merged with reciprocal rank fusion, reranked by a local cross-encoder, neighbouring chunks added. |
+| Relevance gate | `rag/qa.py` | If the best reranker score is below `RAG_MIN_RERANK_SCORE`, the bot refuses **without calling the LLM**. |
+| Evidence by sentence ID | `rag/qa.py`, `rag/grounding.py` | Sources are split into numbered sentences; the LLM picks IDs and code looks up the exact text, so quotes cannot be invented. No valid evidence → refusal. |
+| Answer from quotes | `rag/qa.py` | The answering LLM sees only the verified quotes, never whole chunks. |
+| Citation check | `rag/grounding.py` | Every factual sentence must cite a source that has a verified quote. |
+| Fact check + removal | `rag/grounding.py` | One batched LLM check of every claim against its cited quotes; unsupported sentences are removed (strict mode, the default). |
+| Evaluation | `rag/eval.py` | Facts, images, follow-ups, and trap questions (general knowledge or on-topic but absent) that must be refused. |
 
-The threshold was calibrated with the evaluation: answerable questions scored ≥ 0.76, trap questions ≤ 0.63.
-Re-check it with `RAG_MIN_SCORE=0 uv run python -m rag.eval` when the corpus or embedding model changes.
+Re-calibrate the gate with `RAG_MIN_RERANK_SCORE=0 uv run python -m rag.eval` when the corpus or models change.
+Architecture history and diagrams: [`docs/architecture`](docs/architecture/README.md).
 
 ## Dataset
 
@@ -73,7 +80,9 @@ Images are retrieved through their NASA title, description, keywords and date.
 | `EMBED_MODEL` / `EMBED_DIM` | `nomic-embed-text` / `768` |
 | `CHAT_MODEL` | `qwen3:4b-instruct` |
 | `RAG_TEAM` | `default` |
-| `RAG_MIN_SCORE` | `0.68` |
+| `RAG_RERANK` / `RERANK_MODEL` | `1` / `jinaai/jina-reranker-v1-turbo-en` |
+| `RAG_MIN_RERANK_SCORE` | `0.1` (gate with reranker) |
+| `RAG_MIN_SCORE` | `0.68` (gate with `RAG_RERANK=0`) |
 
 ## Sharing across teams
 

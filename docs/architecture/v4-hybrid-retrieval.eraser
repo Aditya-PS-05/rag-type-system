@@ -1,0 +1,39 @@
+title V4 - Hybrid retrieval with reranking
+direction right
+colorMode bold
+styleMode shadow
+
+Postgres [color: blue] {
+  HNSW vector index [shape: cylinder, icon: database]
+  Full-text GIN index [shape: cylinder, icon: database]
+  Chunk table [shape: cylinder, icon: database]
+}
+
+Retrieve [color: blue] {
+  Standalone question [icon: help-circle]
+  Vector search top 30 [icon: search]
+  Keyword search top 30 [icon: type]
+  RRF fusion [icon: git-merge]
+  Reranker jina-turbo [icon: bar-chart-2]
+  Reranker gate [shape: diamond, icon: filter, color: orange]
+  Add neighbouring chunks [icon: layers]
+}
+
+Downstream [color: green] {
+  Evidence selection and verified answer [icon: shield]
+}
+
+Refusal [icon: x-octagon, color: red]
+
+Standalone question > Vector search top 30
+Standalone question > Keyword search top 30
+Vector search top 30 <> HNSW vector index
+Keyword search top 30 <> Full-text GIN index
+Vector search top 30 > RRF fusion
+Keyword search top 30 > RRF fusion
+RRF fusion > Reranker jina-turbo: 24 candidates
+Reranker jina-turbo > Reranker gate: top 6
+Reranker gate > Refusal: low relevance
+Reranker gate > Add neighbouring chunks
+Add neighbouring chunks <> Chunk table
+Add neighbouring chunks > Evidence selection and verified answer: same as V3

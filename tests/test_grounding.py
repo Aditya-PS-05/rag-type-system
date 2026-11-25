@@ -1,5 +1,26 @@
-from rag.grounding import REFUSAL, GroundingReport, check_citations, split_claims, verify_claims
+from rag.grounding import (REFUSAL, Claim, check_citations, number_sentences, quotes_from_ids, remove_claims,
+                           split_claims, verify_claims)
 from rag.store import SearchHit
+
+VOYAGER = ("In March 2013, it was announced that Voyager 1 might have become the first spacecraft to enter "
+           "interstellar space, having detected a marked change in the plasma environment on August 25, 2012. "
+           "However, until September 12, 2013, it was still an open question.")
+
+
+def test_number_sentences_ids_each_source_sentence():
+    hits = [SearchHit("Hubble launched in 1990. It has a 2.4 m mirror.", 0.8, "text", "Hubble", "s", "p", None),
+            SearchHit(VOYAGER, 0.8, "text", "Voyager 1", "s", "p", None)]
+    numbered = number_sentences(hits)
+    assert numbered["1.1"] == (1, "Hubble launched in 1990.")
+    assert numbered["1.2"] == (1, "It has a 2.4 m mirror.")
+    assert numbered["2.2"][1].startswith("However, until September 12, 2013")
+
+
+def test_quotes_from_ids_merges_consecutive_and_flags_invented_ids():
+    numbered = {"1.1": (1, "A."), "1.2": (1, "B."), "1.4": (1, "D."), "2.1": (2, "X.")}
+    quotes = quotes_from_ids(["1.1", "1.2", "2.1", "1.4", "9.9", "1.1"], numbered)
+    assert [(q.source, q.text, q.verified) for q in quotes] == [
+        (1, "A. B.", True), (2, "X.", True), (1, "D.", True), (0, "9.9", False)]
 
 
 def test_split_claims_attaches_trailing_citations_and_drops_fragments():
@@ -10,16 +31,16 @@ def test_split_claims_attaches_trailing_citations_and_drops_fragments():
     ]
 
 
-def test_check_citations_flags_missing_and_invalid():
+def test_check_citations_flags_missing_and_unquoted_sources():
     answer = ("Hubble launched in 1990 aboard STS-31 [1]. It has a 2.4 metre primary mirror. "
-              "It will operate until about 2040 [7].")
-    report = check_citations(answer, num_sources=6)
-    assert [c.issue for c in report.claims] == [None, "no citation", "cites non-existent source [7]"]
+              "It will operate until about 2040 [4].")
+    report = check_citations(answer, valid_sources={1, 2})
+    assert [c.issue for c in report.claims] == [None, "no citation", "cites source(s) [4] with no verified quote"]
     assert len(report.problems) == 2
 
 
 def test_refusal_has_no_claims():
-    assert check_citations(REFUSAL, 6).claims == []
+    assert check_citations(REFUSAL, {1}).claims == []
 
 
 class FakeJudge:
@@ -32,14 +53,33 @@ class FakeJudge:
         return next(self.verdicts)
 
 
-def test_verify_claims_checks_only_cited_claims_against_their_sources():
-    hits = [SearchHit(f"source text {i}", 0.8, "text", f"T{i}", "s", "p", None) for i in range(1, 4)]
-    report = check_citations("Entered interstellar space in 2013 per NASA [2]. An uncited statement about Saturn.", 3)
-    judge = FakeJudge([{"supported": False, "reason": "source says 2012"}])
-    verify_claims(judge, report, hits)
+def test_verify_claims_judges_all_cited_claims_in_one_call():
+    report = check_citations("Entered interstellar space in 2013 per NASA [2]. An uncited statement about Saturn. "
+                             "Voyager 1 launched in the year 1977 [1].", {1, 2, 3})
+    judge = FakeJudge([{"verdicts": [{"claim": 1, "supported": False, "reason": "evidence says 2012"},
+                                     {"claim": 2, "supported": True, "reason": "stated"}]}])
+    verify_claims(judge, report, {1: "evidence one", 2: "evidence two", 3: "unused evidence"})
+    prompt = judge.prompts[0]
     assert len(judge.prompts) == 1
-    assert "source text 2" in judge.prompts[0] and "source text 1" not in judge.prompts[0]
-    assert "[2]" not in judge.prompts[0].split("CLAIM:")[1]
-    assert report.claims[0].supported is False and report.claims[0].reason == "source says 2012"
-    assert report.claims[1].issue == "no citation"
-    assert isinstance(report, GroundingReport) and len(report.problems) == 2
+    assert "evidence one" in prompt and "evidence two" in prompt and "unused evidence" not in prompt
+    assert "Saturn" not in prompt
+    assert [c.supported for c in report.claims] == [False, None, True]
+    assert report.claims[0].reason == "evidence says 2012" and report.claims[1].issue == "no citation"
+
+
+def test_claim_without_verdict_is_unsupported():
+    report = check_citations("Voyager 1 launched in the year 1977 [1].", {1})
+    verify_claims(FakeJudge([{"verdicts": []}]), report, {1: "e"})
+    assert report.claims[0].supported is False
+
+
+def test_remove_claims_cleans_up_bullets_and_blank_lines():
+    answer = "Intro sentence about Juno here [1].\n\n- Bad claim that is unsupported [2].\n- Good claim that is fine [1]."
+    out = remove_claims(answer, [Claim("Bad claim that is unsupported [2].", [2])])
+    assert out == "Intro sentence about Juno here [1].\n\n- Good claim that is fine [1]."
+
+
+def test_image_source_is_a_single_evidence_unit():
+    hits = [SearchHit("Image: ISS\n\nDate: 2001-01-01\n\nThe station orbits Earth. It is large.", 0.8, "image", "ISS", "s", "p", None)]
+    assert list(number_sentences(hits).items()) == [
+        ("1.1", (1, "Image: ISS Date: 2001-01-01 The station orbits Earth. It is large."))]

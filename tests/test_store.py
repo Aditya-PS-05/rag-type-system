@@ -57,3 +57,21 @@ def test_reingest_replaces_chunks(store):
     add(store, "a", "doc.txt", "text", [0, 1, 0, 0], chash="v2")
     assert not store.is_current("a", "doc.txt", "v1", "m")
     assert store.stats("a") == [("text", 1, 1)]
+
+
+def test_keyword_search_matches_any_term_and_title(store):
+    for path, title, text in [("j.txt", "Juno", "It arrived in 2016."), ("p.txt", "Pluto", "A dwarf planet.")]:
+        store.upsert_document(team="a", doc_type="text", path=path, title=title, source="s", license="l", meta={},
+                              chash="h", embed_model="m", chunks=[Chunk(0, None, text, [1, 0, 0, 0])])
+    hits = store.keyword_search("when did juno arrive", team="a", embed_model="m")
+    assert [h.path for h in hits] == ["j.txt"]
+    assert hits[0].chunk_id and hits[0].document_id
+    assert store.keyword_search("the of and", team="a", embed_model="m") == []
+
+
+def test_chunk_neighbors_returns_adjacent_chunks(store):
+    store.upsert_document(team="a", doc_type="text", path="d.txt", title="D", source="s", license="l", meta={},
+                          chash="h", embed_model="m",
+                          chunks=[Chunk(i, None, f"part {i}", [1, 0, 0, 0]) for i in range(4)])
+    doc_id = store.search([1, 0, 0, 0], team="a", embed_model="m", k=1)[0].document_id
+    assert store.chunk_neighbors([(doc_id, 2)]) == {(doc_id, 1): "part 1", (doc_id, 3): "part 3"}

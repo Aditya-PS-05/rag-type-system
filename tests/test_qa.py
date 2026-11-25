@@ -1,26 +1,52 @@
-from rag.qa import retrieve
 from rag.config import Settings
+from rag.grounding import REFUSAL
+from rag.qa import EVIDENCE_SCHEMA, REWRITE_SCHEMA, ask
+from rag.retrieval import VISUAL_INTENT, retrieve
 from rag.store import SearchHit
 
+JUNO = "Juno arrived at Jupiter on July 5, 2016. It is powered by solar arrays."
 
-def hit(doc_type, title):
-    return SearchHit(f"content {title}", 0.8, doc_type, title, "src", f"{title}.x", None)
+
+def hit(doc_type, title, content=None, score=0.8):
+    return SearchHit(content or f"content {title}", score, doc_type, title, "src", f"{title}.x", None)
 
 
 class FakeStore:
-    def __init__(self):
+    def __init__(self, hits=None):
         self.calls = []
+        self.hits = hits
 
     def search(self, embedding, *, team, embed_model, k, doc_types=None):
         self.calls.append(doc_types)
+        if self.hits is not None:
+            return self.hits
         if doc_types == ["image"]:
             return [hit("image", f"img{i}") for i in range(k)]
         return [hit("text", f"t{i}") for i in range(k - 1)] + [hit("image", "img0")]
 
 
 class FakeLLM:
+    """Scripted LLM: JSON calls are answered by schema, chat_stream returns a fixed answer."""
+
+    def __init__(self, ids=(), answer="", verdicts=(), rewrite=None):
+        self.quotes, self.answer, self.verdicts, self.rewrite = list(ids), answer, list(verdicts), rewrite
+        self.streamed = 0
+        self.queries = []
+
     def embed_query(self, text):
+        self.queries.append(text)
         return [0.0]
+
+    def chat_json(self, messages, schema):
+        if schema is REWRITE_SCHEMA:
+            return {"question": self.rewrite}
+        if schema is EVIDENCE_SCHEMA:
+            return {"ids": self.quotes}
+        return self.verdicts.pop(0)
+
+    def chat_stream(self, messages):
+        self.streamed += 1
+        yield self.answer
 
 
 def test_visual_question_includes_images_first_without_duplicates():
@@ -40,24 +66,56 @@ def test_explicit_type_filter_skips_image_boost():
     assert store.calls == [["pdf"]]
 
 
-class LowScoreStore(FakeStore):
-    def search(self, embedding, *, team, embed_model, k, doc_types=None):
-        return [SearchHit("pizza?", 0.5, "text", "Milky Way", "src", "p", None)]
-
-
-class ExplodingLLM(FakeLLM):
-    def chat_stream(self, messages):
-        raise AssertionError("LLM must not be called when no source is relevant")
-
-
-def test_relevance_gate_refuses_without_calling_llm():
-    from rag.qa import ask
-    result = ask(LowScoreStore(), ExplodingLLM(), Settings(min_score=0.65), "best pizza recipe?")
-    assert result.gated and result.refused
-
-
 def test_image_as_verb_is_not_visual_intent():
-    from rag.qa import VISUAL_INTENT
     assert not VISUAL_INTENT.search("Which black hole did the Event Horizon Telescope image first?")
     assert VISUAL_INTENT.search("show me an image of Saturn")
     assert VISUAL_INTENT.search("Any photos of the ISS?")
+
+
+def test_relevance_gate_refuses_without_calling_llm():
+    llm = FakeLLM()
+    result = ask(FakeStore([hit("text", "Milky Way", score=0.5)]), llm, Settings(min_score=0.65), "best pizza?")
+    assert result.gated and result.refused and llm.streamed == 0
+
+
+def test_invented_evidence_ids_refuse_without_answering():
+    llm = FakeLLM(ids=["1.7"])
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive?")
+    assert result.text == REFUSAL and llm.streamed == 0
+    assert len(result.rejected_quotes) == 1
+
+
+def test_unsupported_claims_are_removed_in_strict_mode():
+    llm = FakeLLM(ids=["1.1"],
+                  answer="Juno arrived at Jupiter on July 5, 2016 [1]. It carried a nuclear reactor to Jupiter [1].",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": True, "reason": ""},
+                                         {"claim": 2, "supported": False, "reason": "not in evidence"}]}])
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive?")
+    assert result.text == "Juno arrived at Jupiter on July 5, 2016 [1]."
+    assert [c.reason for c in result.removed] == ["not in evidence"]
+
+
+def test_all_claims_unsupported_becomes_refusal():
+    llm = FakeLLM(ids=["1.2"],
+                  answer="Juno is powered by a nuclear reactor on board [1].",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": False, "reason": "evidence says solar"}]}])
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "How is Juno powered?")
+    assert result.text == REFUSAL
+
+
+def test_fast_mode_streams_and_skips_claim_verification():
+    llm = FakeLLM(ids=["1.2"], answer="Juno is powered by solar arrays [1].")
+    tokens = []
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "How is Juno powered?",
+                 strict=False, on_token=tokens.append)
+    assert tokens == ["Juno is powered by solar arrays [1]."] and result.removed == []
+
+
+def test_follow_up_is_rewritten_before_search():
+    llm = FakeLLM(ids=["1.1"],
+                  answer="Juno arrived at Jupiter on July 5, 2016 [1].",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": True, "reason": ""}]}], rewrite="When did Juno arrive at Jupiter?")
+    history = [{"role": "user", "content": "Tell me about Juno"}, {"role": "assistant", "content": "Juno is..."}]
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did it arrive?", history=history)
+    assert llm.queries == ["When did Juno arrive at Jupiter?"]
+    assert result.search_query == "When did Juno arrive at Jupiter?"

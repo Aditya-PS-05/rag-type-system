@@ -1,0 +1,38 @@
+title V5 - Shared team deployment (proposed)
+direction right
+colorMode bold
+styleMode shadow
+
+Teams [color: gray] {
+  Team A apps [icon: users]
+  Team B chatbot [icon: users]
+}
+
+Ingestion workers [color: green] {
+  Document watcher [icon: eye]
+  Ingest pipeline [icon: upload]
+}
+
+Shared services [color: blue] {
+  RAG API service [icon: server]
+  Embedding server [icon: cpu]
+  LLM server [icon: message-circle]
+  Reranker [icon: bar-chart-2]
+}
+
+Storage [color: purple] {
+  Object storage MinIO [shape: cylinder, icon: archive]
+  Postgres pgvector replicas [shape: cylinder, icon: database]
+}
+
+Document watcher > Ingest pipeline: new or changed files
+Ingest pipeline > Object storage MinIO: raw PDFs and images
+Ingest pipeline > Embedding server
+Ingest pipeline > Postgres pgvector replicas: chunks + vectors + team ACL
+Team A apps > RAG API service: question + team
+Team B chatbot > RAG API service
+RAG API service > Embedding server
+RAG API service <> Postgres pgvector replicas: filtered by team and embed model
+RAG API service > Reranker
+RAG API service > LLM server
+RAG API service > Team A apps: grounded answer

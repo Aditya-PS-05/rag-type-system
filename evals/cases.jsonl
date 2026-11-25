@@ -32,3 +32,13 @@
 {"q": "How do I sort a list in Python?", "trap": true}
 {"q": "Who painted the Mona Lisa?", "trap": true}
 {"q": "What is the best pizza recipe?", "trap": true}
+{"q": "Which was launched first, Hubble or the Kepler space telescope?", "expect": ["1990", "2009"]}
+{"q": "When did it arrive at Jupiter?", "history": ["Tell me about the Juno spacecraft"], "expect": ["2016"]}
+{"q": "Who was its commander?", "history": ["What was Apollo 11?"], "expect": ["Armstrong"]}
+{"q": "Where did it land?", "history": ["What is the Perseverance rover?"], "expect": ["Jezero"]}
+{"q": "When was it launched?", "history": ["Tell me about the Hubble Space Telescope"], "expect": ["1990"]}
+{"q": "What was the name of Neil Armstrong's dog?", "trap": true}
+{"q": "What was the Europa Clipper mission's total cost in euros?", "trap": true}
+{"q": "What is the phone number of the Space Telescope Science Institute?", "trap": true}
+{"q": "What did Yuri Gagarin eat for breakfast on the morning of his flight?", "trap": true}
+{"q": "How many tweets did NASA post about the Ingenuity helicopter?", "trap": true}

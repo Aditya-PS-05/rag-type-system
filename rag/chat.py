@@ -1,7 +1,7 @@
 """Terminal chatbot over the indexed corpus.
 
-Usage: uv run python -m rag.chat [--type text,pdf,image] [-k 6] [--verify]
-Commands inside the chat: /sources, /verify (toggle), /help, exit
+Usage: uv run python -m rag.chat [--type text,pdf,image] [-k 6] [--fast] [--show-evidence]
+Commands inside the chat: /sources, /strict (toggle), /evidence (toggle), /help, exit
 """
 
 import argparse
@@ -9,14 +9,15 @@ import sys
 from pathlib import Path
 
 from rag.config import Settings
-from rag.grounding import verify_claims
 from rag.ollama import Ollama
 from rag.qa import Answer, ask
+from rag.rerank import Reranker
 from rag.store import SearchHit, VectorStore
 
 HELP = """Commands:
   /sources   list the indexed documents
-  /verify    toggle fact-checking of each answer against its cited sources
+  /strict    toggle strict mode (fact-check and remove unsupported claims; on by default)
+  /evidence  toggle showing the verified quotes each answer was built from
   /help      show this help
   exit       quit"""
 
@@ -24,33 +25,39 @@ HELP = """Commands:
 def citation_line(i: int, h: SearchHit, data_dir: Path) -> str:
     where = f" p.{h.page}" if h.page else ""
     loc = data_dir / h.path if h.doc_type == "image" else h.source
-    return f"  [{i}] {h.doc_type:5} {h.score:.2f}  {h.title[:60]}{where}  {loc}"
+    return f"  [{i}] {h.doc_type:5} {h.title[:60]}{where}  {loc}"
 
 
-def print_report(result: Answer, data_dir: Path, min_score: float):
+def print_report(result: Answer, data_dir: Path, min_score: float, strict: bool, show_evidence: bool):
     if result.gated:
         best = max((h.score for h in result.hits), default=0)
         print(f"\n(no source was relevant enough: best match {best:.2f} < threshold {min_score:.2f}; "
               "the model was not called)")
         return
-    if not result.refused:
-        print("\nSources:")
-        for i, h in enumerate(result.hits, start=1):
-            print(citation_line(i, h, data_dir))
-    claims = result.grounding.claims
-    if not claims:
+    if result.rejected_quotes:
+        print(f"\n({len(result.rejected_quotes)} evidence ID(s) discarded: not present in the sources)")
+    if not result.verified_quotes:
+        print("(no evidence for this question was found in the retrieved sources)")
         return
-    checked = [c for c in claims if c.supported is not None]
-    problems = result.grounding.problems
-    if checked:
-        print(f"\nFact check: {sum(c.supported for c in checked)}/{len(checked)} cited claims supported by their sources")
-    if problems:
-        print("Warnings:")
-        for c in problems:
-            why = c.issue or f"not supported by its source: {c.reason}"
-            print(f"  ⚠ {why}\n      \"{c.text[:160]}\"")
-    elif not checked:
-        print("\nCitations: every claim cites a source (use /verify to also fact-check them)")
+    if show_evidence:
+        print("\nEvidence (verified quotes):")
+        for q in result.verified_quotes:
+            print(f"  [{q.source}] \"{q.text[:220]}\"")
+    if not result.refused and result.cited_sources:
+        print("\nSources:")
+        for n in result.cited_sources:
+            print(citation_line(n, result.hits[n - 1], data_dir))
+    if result.removed:
+        print(f"\nRemoved {len(result.removed)} unsupported sentence(s):")
+        for c in result.removed:
+            why = c.issue or c.reason
+            print(f"  ✗ \"{c.text[:150]}\"\n      {why}")
+    elif not strict and result.grounding.problems:
+        print("\nWarnings:")
+        for c in result.grounding.problems:
+            print(f"  ⚠ {c.issue}: \"{c.text[:150]}\"")
+    elif strict and result.grounding.claims:
+        print(f"\nFact check: all {len(result.grounding.claims)} claim(s) supported by the quoted sources")
 
 
 def print_sources(store: VectorStore, team: str):
@@ -68,17 +75,19 @@ def main():
     ap.add_argument("--type", help="comma-separated doc types to search: text,pdf,image")
     ap.add_argument("-k", type=int, default=6, help="number of chunks to retrieve")
     ap.add_argument("--data-dir", default="data/raw")
-    ap.add_argument("--verify", action="store_true", help="fact-check each answer against its sources")
+    ap.add_argument("--fast", action="store_true", help="stream answers without fact-checking each claim")
+    ap.add_argument("--show-evidence", action="store_true", help="print the verified quotes behind each answer")
     ap.add_argument("-q", "--question", help="ask one question and exit")
     args = ap.parse_args()
 
     cfg = Settings()
     store = VectorStore(cfg.database_url, cfg.embed_dim)
     llm = Ollama(cfg.ollama_url, cfg.embed_model, cfg.chat_model)
+    reranker = Reranker(cfg.rerank_model) if cfg.use_reranker else None
     doc_types = args.type.split(",") if args.type else None
     data_dir = Path(args.data_dir).resolve()
     history: list[dict] = []
-    verify = args.verify
+    strict, show_evidence = not args.fast, args.show_evidence
 
     def stream(token: str):
         sys.stdout.write(token)
@@ -86,22 +95,26 @@ def main():
 
     def handle(question: str):
         result = ask(store, llm, cfg, question, history=history, k=args.k, doc_types=doc_types,
-                     on_token=stream)
-        print()
+                     strict=strict, reranker=reranker, on_token=stream)
+        if strict or not result.verified_quotes:
+            print(result.text)
+        else:
+            print()
+        if result.search_query != question:
+            print(f"\n(searched for: {result.search_query})")
         if not result.hits:
             print("No indexed documents found. Run: uv run python -m rag.ingest")
             return
-        if verify and result.grounding.claims:
-            print("\n(fact-checking each claim against its cited source...)")
-            verify_claims(llm, result.grounding, result.hits)
-        print_report(result, data_dir, cfg.min_score)
+        print_report(result, data_dir, cfg.min_rerank_score if reranker else cfg.min_score, strict, show_evidence)
         history.extend([{"role": "user", "content": question}, {"role": "assistant", "content": result.text}])
 
     if args.question:
         handle(args.question)
         return
 
-    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}). Type /help for commands.\n")
+    mode = "strict" if strict else "fast"
+    rerank = "reranker on" if reranker else "reranker off"
+    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}, {rerank}, {mode} mode). Type /help for commands.\n")
     while True:
         try:
             question = input("you> ").strip()
@@ -114,11 +127,14 @@ def main():
             print(HELP)
         elif question == "/sources":
             print_sources(store, cfg.team)
-        elif question == "/verify":
-            verify = not verify
-            print(f"fact-checking {'on' if verify else 'off'}")
+        elif question == "/strict":
+            strict = not strict
+            print(f"strict mode {'on' if strict else 'off'}")
+        elif question == "/evidence":
+            show_evidence = not show_evidence
+            print(f"showing evidence {'on' if show_evidence else 'off'}")
         elif question:
-            print("bot> ", end="")
+            print("bot> ", end="", flush=True)
             handle(question)
         print()
 

@@ -26,6 +26,12 @@ class SearchHit:
     source: str
     path: str
     page: int | None
+    chunk_id: int = 0
+    document_id: int = 0
+    chunk_index: int = 0
+
+
+_HIT_COLUMNS = "c.content, {score} AS score, d.doc_type, d.title, d.source, d.path, c.page, c.id, d.id, c.chunk_index"
 
 
 def content_hash(sections) -> str:
@@ -67,6 +73,10 @@ class VectorStore:
                 ON chunks USING hnsw (embedding vector_cosine_ops);
             CREATE INDEX IF NOT EXISTS chunks_document_id ON chunks (document_id);
             CREATE INDEX IF NOT EXISTS documents_team_type ON documents (team, doc_type);
+            ALTER TABLE chunks ADD COLUMN IF NOT EXISTS tsv tsvector;
+            UPDATE chunks c SET tsv = to_tsvector('english', d.title || ' ' || c.content)
+                FROM documents d WHERE d.id = c.document_id AND c.tsv IS NULL;
+            CREATE INDEX IF NOT EXISTS chunks_tsv_gin ON chunks USING gin (tsv);
         """)
 
     def is_current(self, team: str, path: str, chash: str, embed_model: str) -> bool:
@@ -87,9 +97,9 @@ class VectorStore:
             ).fetchone()[0]
             with self.conn.cursor() as cur:
                 cur.executemany(
-                    "INSERT INTO chunks (document_id, chunk_index, page, content, embedding) "
-                    "VALUES (%s,%s,%s,%s,%s)",
-                    [(doc_id, c.index, c.page, c.content, np.asarray(c.embedding, dtype=np.float32))
+                    "INSERT INTO chunks (document_id, chunk_index, page, content, embedding, tsv) "
+                    "VALUES (%s,%s,%s,%s,%s, to_tsvector('english', %s || ' ' || %s))",
+                    [(doc_id, c.index, c.page, c.content, np.asarray(c.embedding, dtype=np.float32), title, c.content)
                      for c in chunks])
 
     def search(self, embedding: list[float], *, team: str, embed_model: str, k: int = 6,
@@ -97,8 +107,7 @@ class VectorStore:
         with self.conn.transaction():
             self.conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
             rows = self.conn.execute(
-                """SELECT c.content, 1 - (c.embedding <=> %(q)s) AS score, d.doc_type, d.title,
-                          d.source, d.path, c.page
+                f"""SELECT {_HIT_COLUMNS.format(score="1 - (c.embedding <=> %(q)s)")}
                    FROM chunks c JOIN documents d ON d.id = c.document_id
                    WHERE d.team = %(team)s AND d.embed_model = %(model)s
                      AND (%(types)s::text[] IS NULL OR d.doc_type = ANY(%(types)s::text[]))
@@ -108,6 +117,34 @@ class VectorStore:
                  "team": team, "model": embed_model, "types": doc_types, "k": k},
             ).fetchall()
         return [SearchHit(*r) for r in rows]
+
+    def keyword_search(self, query: str, *, team: str, embed_model: str, k: int = 30,
+                       doc_types: list[str] | None = None) -> list[SearchHit]:
+        """Full-text search; any query term may match (OR), ranked by term density and proximity."""
+        rows = self.conn.execute(
+            f"""WITH q AS (SELECT NULLIF(replace(plainto_tsquery('english', %(q)s)::text, ' & ', ' | '), '')::tsquery AS q)
+               SELECT {_HIT_COLUMNS.format(score="ts_rank_cd(c.tsv, q.q)")}
+               FROM q, chunks c JOIN documents d ON d.id = c.document_id
+               WHERE q.q IS NOT NULL AND c.tsv @@ q.q
+                 AND d.team = %(team)s AND d.embed_model = %(model)s
+                 AND (%(types)s::text[] IS NULL OR d.doc_type = ANY(%(types)s::text[]))
+               ORDER BY score DESC
+               LIMIT %(k)s""",
+            {"q": query, "team": team, "model": embed_model, "types": doc_types, "k": k},
+        ).fetchall()
+        return [SearchHit(*r) for r in rows]
+
+    def chunk_neighbors(self, keys: list[tuple[int, int]]) -> dict[tuple[int, int], str]:
+        """Content of the chunks immediately before and after each (document_id, chunk_index)."""
+        if not keys:
+            return {}
+        wanted = {(d, i + off) for d, i in keys for off in (-1, 1)}
+        rows = self.conn.execute(
+            """SELECT document_id, chunk_index, content FROM chunks
+               WHERE (document_id, chunk_index) IN (SELECT * FROM unnest(%s::bigint[], %s::int[]))""",
+            ([d for d, _ in wanted], [i for _, i in wanted]),
+        ).fetchall()
+        return {(d, i): content for d, i, content in rows}
 
     def list_documents(self, team: str) -> list[tuple[str, str]]:
         return self.conn.execute(

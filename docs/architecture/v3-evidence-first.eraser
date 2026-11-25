@@ -1,0 +1,52 @@
+title V3 - Evidence-first answering
+direction right
+colorMode bold
+styleMode shadow
+
+Postgres pgvector [shape: cylinder, icon: database, color: blue]
+
+Understand [color: purple] {
+  User [icon: user]
+  Chat history [icon: clock]
+  Follow-up rewriter [icon: edit]
+}
+
+Retrieve [color: blue] {
+  Top-6 cosine search [icon: search]
+  Relevance gate [shape: diamond, icon: filter, color: orange]
+}
+
+Evidence [color: green] {
+  Sentence numbering [icon: list]
+  LLM selects sentence IDs [icon: message-circle]
+  Code looks up exact sentences [icon: code]
+}
+
+Answer [color: purple] {
+  LLM answers from quotes only [icon: message-circle]
+}
+
+Verify [color: orange] {
+  Citation check [icon: check-square]
+  Batch LLM fact check [icon: shield]
+  Remove unsupported sentences [icon: scissors]
+}
+
+Refusal [icon: x-octagon, color: red]
+
+User > Follow-up rewriter: question
+Chat history > Follow-up rewriter
+Follow-up rewriter > Top-6 cosine search: standalone question
+Top-6 cosine search <> Postgres pgvector
+Top-6 cosine search > Relevance gate
+Relevance gate > Refusal: nothing relevant
+Relevance gate > Sentence numbering
+Sentence numbering > LLM selects sentence IDs
+LLM selects sentence IDs > Code looks up exact sentences: IDs like 2.5
+Code looks up exact sentences > Refusal: no valid evidence
+Code looks up exact sentences > LLM answers from quotes only: verified quotes
+LLM answers from quotes only > Citation check
+Citation check > Batch LLM fact check
+Batch LLM fact check > Remove unsupported sentences
+Remove unsupported sentences > Refusal: nothing supported left
+Remove unsupported sentences > User: answer + evidence + sources

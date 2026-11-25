@@ -1,0 +1,42 @@
+title V1 - Basic local RAG
+direction right
+colorMode bold
+styleMode shadow
+
+Data sources [color: gray] {
+  Wikipedia articles [icon: file-text]
+  arXiv PDFs [icon: file]
+  NASA images and captions [icon: image]
+}
+
+Ingestion [color: green] {
+  Loaders [icon: upload]
+  Chunker 1200 chars [icon: scissors]
+  Embedder nomic-embed-text [icon: cpu]
+}
+
+Postgres pgvector [shape: cylinder, icon: database, color: blue]
+
+Query path [color: purple] {
+  User [icon: user]
+  Chat CLI [icon: terminal]
+  Query embedder [icon: cpu]
+  Top-6 cosine search [icon: search]
+  Image boost [icon: image]
+  LLM qwen3-4b-instruct [icon: message-circle]
+}
+
+Wikipedia articles > Loaders
+arXiv PDFs > Loaders
+NASA images and captions > Loaders
+Loaders > Chunker 1200 chars
+Chunker 1200 chars > Embedder nomic-embed-text
+Embedder nomic-embed-text > Postgres pgvector: vectors + text + metadata
+
+User > Chat CLI: question
+Chat CLI > Query embedder
+Query embedder > Top-6 cosine search
+Top-6 cosine search <> Postgres pgvector
+Top-6 cosine search > Image boost: picture questions
+Image boost > LLM qwen3-4b-instruct: sources + prompt
+LLM qwen3-4b-instruct > User: answer + citations
