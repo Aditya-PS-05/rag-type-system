@@ -32,8 +32,8 @@ Keyword search top 30 <> Full-text GIN index
 Vector search top 30 > RRF fusion
 Keyword search top 30 > RRF fusion
 RRF fusion > Reranker jina-turbo: 24 candidates
-Reranker jina-turbo > Reranker gate: top 6
-Reranker gate > Refusal: low relevance
+Reranker jina-turbo > Reranker gate: top 8
+Reranker gate > Refusal: best score below 0.3
 Reranker gate > Add neighbouring chunks
 Add neighbouring chunks <> Chunk table
 Add neighbouring chunks > Evidence selection and verified answer: same as V3

@@ -73,7 +73,7 @@ def print_sources(store: VectorStore, team: str):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--type", help="comma-separated doc types to search: text,pdf,image")
-    ap.add_argument("-k", type=int, default=6, help="number of chunks to retrieve")
+    ap.add_argument("-k", type=int, default=8, help="number of chunks to retrieve")
     ap.add_argument("--data-dir", default="data/raw")
     ap.add_argument("--fast", action="store_true", help="stream answers without fact-checking each claim")
     ap.add_argument("--show-evidence", action="store_true", help="print the verified quotes behind each answer")

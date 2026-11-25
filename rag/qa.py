@@ -115,7 +115,7 @@ def evidence_by_source(quotes: list[Quote], hits: list[SearchHit]) -> dict[int, 
 
 
 def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, history: list[dict] | None = None,
-        k: int = 6, doc_types: list[str] | None = None, strict: bool = True, reranker=None,
+        k: int = 8, doc_types: list[str] | None = None, strict: bool = True, reranker=None,
         on_token: Callable[[str], None] | None = None) -> Answer:
     """Answer from the documents only.
 

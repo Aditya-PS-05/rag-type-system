@@ -18,7 +18,7 @@ def test_number_sentences_ids_each_source_sentence():
 
 def test_quotes_from_ids_merges_consecutive_and_flags_invented_ids():
     numbered = {"1.1": (1, "A."), "1.2": (1, "B."), "1.4": (1, "D."), "2.1": (2, "X.")}
-    quotes = quotes_from_ids(["1.1", "1.2", "2.1", "1.4", "9.9", "1.1"], numbered)
+    quotes = quotes_from_ids(["1.1", "1.2", "2.1", "1.4", "9.9", "1.1"], numbered, context=0)
     assert [(q.source, q.text, q.verified) for q in quotes] == [
         (1, "A. B.", True), (2, "X.", True), (1, "D.", True), (0, "9.9", False)]
 
@@ -83,3 +83,9 @@ def test_image_source_is_a_single_evidence_unit():
     hits = [SearchHit("Image: ISS\n\nDate: 2001-01-01\n\nThe station orbits Earth. It is large.", 0.8, "image", "ISS", "s", "p", None)]
     assert list(number_sentences(hits).items()) == [
         ("1.1", (1, "Image: ISS Date: 2001-01-01 The station orbits Earth. It is large."))]
+
+
+def test_quotes_from_ids_adds_neighbouring_sentences():
+    numbered = {f"1.{i}": (1, f"S{i}.") for i in range(1, 6)}
+    quotes = quotes_from_ids(["1.1", "1.5"], numbered)
+    assert [q.text for q in quotes] == ["S1. S2.", "S4. S5."]

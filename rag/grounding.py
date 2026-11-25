@@ -61,14 +61,28 @@ def number_sentences(hits: list[SearchHit]) -> dict[str, tuple[int, str]]:
     return numbered
 
 
-def quotes_from_ids(ids: list[str], numbered: dict[str, tuple[int, str]]) -> list[Quote]:
-    """Turn selected sentence IDs into quotes; consecutive sentences of one source are merged.
+def _with_context(ids: list[str], numbered: dict[str, tuple[int, str]], context: int) -> list[str]:
+    expanded = []
+    for raw in ids:
+        if raw not in numbered or context == 0:
+            expanded.append(raw)
+            continue
+        source, sentence_no = raw.split(".")
+        span = range(int(sentence_no) - context, int(sentence_no) + context + 1)
+        expanded += [sid for n in span if (sid := f"{source}.{n}") in numbered]
+    return expanded
 
-    IDs that don't exist become unverified quotes, so made-up evidence is visible but never used.
+
+def quotes_from_ids(ids: list[str], numbered: dict[str, tuple[int, str]], context: int = 1) -> list[Quote]:
+    """Turn selected sentence IDs (plus `context` neighbouring sentences each) into quotes.
+
+    Consecutive sentences of one source are merged. IDs that don't exist become unverified quotes,
+    so made-up evidence is visible but never used.
     """
     quotes: list[Quote] = []
     last: tuple[int, int] | None = None
-    for raw in dict.fromkeys(str(i).strip() for i in ids):
+    ids = _with_context([str(i).strip() for i in ids], numbered, context)
+    for raw in dict.fromkeys(ids):
         if raw not in numbered:
             quotes.append(Quote(0, raw, verified=False))
             continue
