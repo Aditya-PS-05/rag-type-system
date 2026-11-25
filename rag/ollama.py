@@ -32,10 +32,18 @@ class Ollama:
     def chat_stream(self, messages: list[dict], num_ctx: int = 8192) -> Iterator[str]:
         with self.client.stream("POST", "/api/chat", json={
             "model": self.chat_model, "messages": messages, "stream": True,
-            "options": {"num_ctx": num_ctx, "temperature": 0.2},
+            "options": {"num_ctx": num_ctx, "temperature": 0},
         }) as r:
             r.raise_for_status()
             for line in r.iter_lines():
                 if line:
                     chunk = json.loads(line)
                     yield chunk.get("message", {}).get("content", "")
+
+    def chat_json(self, messages: list[dict], schema: dict, num_ctx: int = 8192) -> dict:
+        r = self.client.post("/api/chat", json={
+            "model": self.chat_model, "messages": messages, "stream": False, "format": schema,
+            "options": {"num_ctx": num_ctx, "temperature": 0},
+        })
+        r.raise_for_status()
+        return json.loads(r.json()["message"]["content"])

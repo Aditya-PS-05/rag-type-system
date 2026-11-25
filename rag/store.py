@@ -109,6 +109,10 @@ class VectorStore:
             ).fetchall()
         return [SearchHit(*r) for r in rows]
 
+    def list_documents(self, team: str) -> list[tuple[str, str]]:
+        return self.conn.execute(
+            "SELECT doc_type, title FROM documents WHERE team=%s ORDER BY doc_type, title", (team,)).fetchall()
+
     def stats(self, team: str) -> list[tuple]:
         return self.conn.execute(
             """SELECT d.doc_type, count(DISTINCT d.id), count(c.id)

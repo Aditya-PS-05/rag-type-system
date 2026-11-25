@@ -1,0 +1,34 @@
+{"q": "Who were the crew members of Apollo 11?", "expect": ["Armstrong", "Aldrin", "Collins"]}
+{"q": "On what date did Apollo 11 land on the Moon?", "expect": ["July 20"]}
+{"q": "When did Voyager 1 enter interstellar space?", "expect": ["2012"]}
+{"q": "In what year was Voyager 1 launched?", "expect": ["1977"]}
+{"q": "When was the Hubble Space Telescope launched?", "expect": ["1990"]}
+{"q": "How large is Hubble's primary mirror?", "expect": ["2.4"]}
+{"q": "When was the James Webb Space Telescope launched?", "expect": ["2021"]}
+{"q": "What kind of instrument is PIXL on the Perseverance rover?", "expect": ["X-ray"]}
+{"q": "Where did the Perseverance rover land on Mars?", "expect": ["Jezero"]}
+{"q": "In which crater did the Curiosity rover land?", "expect": ["Gale"]}
+{"q": "When did the Ingenuity helicopter make its first flight on Mars?", "expect": ["2021"]}
+{"q": "When was Sputnik 1 launched?", "expect": ["1957"]}
+{"q": "In what year did Yuri Gagarin fly into space?", "expect": ["1961"]}
+{"q": "Where on the Moon did Chandrayaan-3 land?", "expect": ["south pol"]}
+{"q": "When was Europa Clipper launched?", "expect": ["2024"]}
+{"q": "When did New Horizons fly past Pluto?", "expect": ["2015"]}
+{"q": "When did the Cassini mission end?", "expect": ["2017"]}
+{"q": "When did Juno arrive at Jupiter?", "expect": ["2016"]}
+{"q": "When were gravitational waves first directly detected?", "expect": ["2015"]}
+{"q": "Which galaxy's black hole did the Event Horizon Telescope image first?", "expect": [["M87", "Messier 87"]]}
+{"q": "When was the Kepler space telescope launched?", "expect": ["2009"]}
+{"q": "In what year was TESS launched?", "expect": ["2018"]}
+{"q": "When was the first module of the International Space Station launched?", "expect": ["1998"]}
+{"q": "How many planets did the TESS Grand Unified Hot Jupiter Survey paper report?", "expect": ["ten"]}
+{"q": "Show me a picture of the Apollo 11 Lunar Module", "expect_image": true}
+{"q": "Show me pictures of the International Space Station", "expect_image": true}
+{"q": "What is the capital of France?", "trap": true}
+{"q": "Who wrote Hamlet?", "trap": true}
+{"q": "How do I bake sourdough bread?", "trap": true}
+{"q": "Who won the 2018 FIFA World Cup?", "trap": true}
+{"q": "What is the boiling point of ethanol?", "trap": true}
+{"q": "How do I sort a list in Python?", "trap": true}
+{"q": "Who painted the Mona Lisa?", "trap": true}
+{"q": "What is the best pizza recipe?", "trap": true}

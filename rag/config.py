@@ -11,3 +11,4 @@ class Settings:
     embed_dim: int = field(default_factory=lambda: int(os.getenv("EMBED_DIM", "768")))
     chat_model: str = field(default_factory=lambda: os.getenv("CHAT_MODEL", "qwen3:4b-instruct"))
     team: str = field(default_factory=lambda: os.getenv("RAG_TEAM", "default"))
+    min_score: float = field(default_factory=lambda: float(os.getenv("RAG_MIN_SCORE", "0.68")))

@@ -34,8 +34,25 @@ uv run python -m rag.ingest data/raw              # unchanged documents are skip
 uv run python -m rag.chat                         # interactive chat
 uv run python -m rag.chat -q "What does PIXL do?" # one-shot
 uv run python -m rag.chat --type image            # search only images (or text, pdf)
+uv run python -m rag.chat --verify                # fact-check every answer (about 2x slower)
+uv run python -m rag.eval [--verify]              # grounding evaluation (evals/cases.jsonl)
 uv run pytest                                     # tests (store tests need the database running)
 ```
+
+In the chat: `/sources` lists indexed documents, `/verify` toggles fact-checking, `/help` shows commands.
+
+## Keeping answers grounded in the documents
+
+| Layer | Where | What it does |
+|---|---|---|
+| Relevance gate | `rag/qa.py` | If no retrieved chunk scores ≥ `RAG_MIN_SCORE` (0.68), the bot refuses **without calling the LLM**. |
+| Grounding prompt | `rag/qa.py` | Sources only, a citation on every factual sentence, a fixed refusal sentence, temperature 0. |
+| Citation check | `rag/grounding.py` | Flags sentences without a citation or citing a source number that doesn't exist. Always on. |
+| Fact check | `rag/grounding.py` | `--verify`: the LLM judges each cited sentence against only its cited chunks and flags unsupported claims. Strict: true facts whose evidence sits in a chunk the sentence doesn't cite are flagged too. |
+| Evaluation | `rag/eval.py` | Answerable questions with expected answers, image questions, and trap questions (general knowledge not in the corpus) that must be refused. Re-run after changing the model, prompt, chunking or threshold. |
+
+The threshold was calibrated with the evaluation: answerable questions scored ≥ 0.76, trap questions ≤ 0.63.
+Re-check it with `RAG_MIN_SCORE=0 uv run python -m rag.eval` when the corpus or embedding model changes.
 
 ## Dataset
 
@@ -56,6 +73,7 @@ Images are retrieved through their NASA title, description, keywords and date.
 | `EMBED_MODEL` / `EMBED_DIM` | `nomic-embed-text` / `768` |
 | `CHAT_MODEL` | `qwen3:4b-instruct` |
 | `RAG_TEAM` | `default` |
+| `RAG_MIN_SCORE` | `0.68` |
 
 ## Sharing across teams
 

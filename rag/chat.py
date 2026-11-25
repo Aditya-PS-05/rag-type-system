@@ -1,47 +1,24 @@
 """Terminal chatbot over the indexed corpus.
 
-Usage: uv run python -m rag.chat [--type text,pdf,image] [-k 6]
+Usage: uv run python -m rag.chat [--type text,pdf,image] [-k 6] [--verify]
+Commands inside the chat: /sources, /verify (toggle), /help, exit
 """
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 from rag.config import Settings
+from rag.grounding import verify_claims
 from rag.ollama import Ollama
+from rag.qa import Answer, ask
 from rag.store import SearchHit, VectorStore
 
-SYSTEM_PROMPT = """You are a helpful assistant answering questions about space exploration \
-using ONLY the numbered sources provided in each message.
-- Cite sources inline like [1] or [2][3].
-- If the sources do not contain the answer, say you don't know based on the available documents.
-- When a source is an image, describe what the image shows based on its description and mention it can be viewed.
-- Be concise and accurate."""
-
-HISTORY_TURNS = 4
-IMAGES_PER_VISUAL_QUERY = 3
-VISUAL_INTENT = re.compile(r"\b(images?|pictures?|photos?|photographs?|show me|look like|looks like)\b", re.I)
-
-
-def retrieve(store: VectorStore, llm: Ollama, cfg: Settings, question: str, k: int,
-             doc_types: list[str] | None) -> list[SearchHit]:
-    embedding = llm.embed_query(question)
-    hits = store.search(embedding, team=cfg.team, embed_model=cfg.embed_model, k=k, doc_types=doc_types)
-    if doc_types is None and VISUAL_INTENT.search(question):
-        images = store.search(embedding, team=cfg.team, embed_model=cfg.embed_model,
-                              k=IMAGES_PER_VISUAL_QUERY, doc_types=["image"])
-        others = [h for h in hits if h.doc_type != "image"]
-        hits = images + others[:max(k - len(images), 0)]
-    return hits
-
-
-def format_sources(hits: list[SearchHit]) -> str:
-    blocks = []
-    for i, h in enumerate(hits, start=1):
-        where = f", page {h.page}" if h.page else ""
-        blocks.append(f"[{i}] ({h.doc_type}) {h.title}{where}\n{h.content}")
-    return "\n\n".join(blocks)
+HELP = """Commands:
+  /sources   list the indexed documents
+  /verify    toggle fact-checking of each answer against its cited sources
+  /help      show this help
+  exit       quit"""
 
 
 def citation_line(i: int, h: SearchHit, data_dir: Path) -> str:
@@ -50,16 +27,40 @@ def citation_line(i: int, h: SearchHit, data_dir: Path) -> str:
     return f"  [{i}] {h.doc_type:5} {h.score:.2f}  {h.title[:60]}{where}  {loc}"
 
 
-def answer(llm: Ollama, history: list[dict], question: str, hits: list[SearchHit]) -> str:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, *history[-2 * HISTORY_TURNS:],
-                {"role": "user", "content": f"Sources:\n\n{format_sources(hits)}\n\nQuestion: {question}"}]
-    parts = []
-    for token in llm.chat_stream(messages):
-        parts.append(token)
-        sys.stdout.write(token)
-        sys.stdout.flush()
-    print()
-    return "".join(parts).strip()
+def print_report(result: Answer, data_dir: Path, min_score: float):
+    if result.gated:
+        best = max((h.score for h in result.hits), default=0)
+        print(f"\n(no source was relevant enough: best match {best:.2f} < threshold {min_score:.2f}; "
+              "the model was not called)")
+        return
+    if not result.refused:
+        print("\nSources:")
+        for i, h in enumerate(result.hits, start=1):
+            print(citation_line(i, h, data_dir))
+    claims = result.grounding.claims
+    if not claims:
+        return
+    checked = [c for c in claims if c.supported is not None]
+    problems = result.grounding.problems
+    if checked:
+        print(f"\nFact check: {sum(c.supported for c in checked)}/{len(checked)} cited claims supported by their sources")
+    if problems:
+        print("Warnings:")
+        for c in problems:
+            why = c.issue or f"not supported by its source: {c.reason}"
+            print(f"  ⚠ {why}\n      \"{c.text[:160]}\"")
+    elif not checked:
+        print("\nCitations: every claim cites a source (use /verify to also fact-check them)")
+
+
+def print_sources(store: VectorStore, team: str):
+    docs = store.list_documents(team)
+    for doc_type in ("text", "pdf", "image"):
+        titles = [t for d, t in docs if d == doc_type]
+        if titles:
+            print(f"\n{doc_type} ({len(titles)}):")
+            for t in titles:
+                print(f"  - {t}")
 
 
 def main():
@@ -67,6 +68,7 @@ def main():
     ap.add_argument("--type", help="comma-separated doc types to search: text,pdf,image")
     ap.add_argument("-k", type=int, default=6, help="number of chunks to retrieve")
     ap.add_argument("--data-dir", default="data/raw")
+    ap.add_argument("--verify", action="store_true", help="fact-check each answer against its sources")
     ap.add_argument("-q", "--question", help="ask one question and exit")
     args = ap.parse_args()
 
@@ -76,23 +78,30 @@ def main():
     doc_types = args.type.split(",") if args.type else None
     data_dir = Path(args.data_dir).resolve()
     history: list[dict] = []
+    verify = args.verify
 
-    def ask(question: str):
-        hits = retrieve(store, llm, cfg, question, args.k, doc_types)
-        if not hits:
+    def stream(token: str):
+        sys.stdout.write(token)
+        sys.stdout.flush()
+
+    def handle(question: str):
+        result = ask(store, llm, cfg, question, history=history, k=args.k, doc_types=doc_types,
+                     on_token=stream)
+        print()
+        if not result.hits:
             print("No indexed documents found. Run: uv run python -m rag.ingest")
             return
-        reply = answer(llm, history, question, hits)
-        print("\nSources:")
-        for i, h in enumerate(hits, start=1):
-            print(citation_line(i, h, data_dir))
-        history.extend([{"role": "user", "content": question}, {"role": "assistant", "content": reply}])
+        if verify and result.grounding.claims:
+            print("\n(fact-checking each claim against its cited source...)")
+            verify_claims(llm, result.grounding, result.hits)
+        print_report(result, data_dir, cfg.min_score)
+        history.extend([{"role": "user", "content": question}, {"role": "assistant", "content": result.text}])
 
     if args.question:
-        ask(args.question)
+        handle(args.question)
         return
 
-    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}). Type 'exit' to quit.\n")
+    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}). Type /help for commands.\n")
     while True:
         try:
             question = input("you> ").strip()
@@ -101,10 +110,17 @@ def main():
             break
         if question.lower() in {"exit", "quit"}:
             break
-        if question:
+        if question == "/help":
+            print(HELP)
+        elif question == "/sources":
+            print_sources(store, cfg.team)
+        elif question == "/verify":
+            verify = not verify
+            print(f"fact-checking {'on' if verify else 'off'}")
+        elif question:
             print("bot> ", end="")
-            ask(question)
-            print()
+            handle(question)
+        print()
 
 
 if __name__ == "__main__":
