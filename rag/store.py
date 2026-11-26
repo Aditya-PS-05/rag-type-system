@@ -146,6 +146,16 @@ class VectorStore:
         ).fetchall()
         return {(d, i): content for d, i, content in rows}
 
+    def corpus_fingerprint(self, team: str, embed_model: str) -> str:
+        """Changes whenever a document is added, removed, edited or re-chunked."""
+        rows = self.conn.execute(
+            """SELECT d.path, d.content_hash, count(c.id) FROM documents d
+               LEFT JOIN chunks c ON c.document_id = d.id
+               WHERE d.team=%s AND d.embed_model=%s GROUP BY d.id ORDER BY d.path""",
+            (team, embed_model)).fetchall()
+        digest = hashlib.sha256(json.dumps(rows).encode()).hexdigest()[:12]
+        return f"{len(rows)} docs, {sum(r[2] for r in rows)} chunks, {digest}"
+
     def list_documents(self, team: str) -> list[tuple[str, str]]:
         return self.conn.execute(
             "SELECT doc_type, title FROM documents WHERE team=%s ORDER BY doc_type, title", (team,)).fetchall()

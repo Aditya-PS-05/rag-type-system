@@ -50,5 +50,6 @@ All calls use temperature 0. JSON calls use Ollama's schema-constrained output, 
 Strict mode (default) waits for the checks before printing. `--fast` streams the answer and only reports citation problems.
 
 ## 6. Interfaces
+- `rag.web`: local web app. A standard-library HTTP server wraps `ask()` and streams newline-delimited JSON (`stage` → `token` → `result`); one offline HTML page renders the pipeline steps live, citations as links into an evidence inspector (quotes, per-sentence verdicts, removed sentences), and image thumbnails served from `data/raw`. One question at a time; `--host 0.0.0.0` shares it on a network.
 - `rag.chat`: terminal chat; shows sources actually cited, removed sentences with reasons, the rewritten query, and the gate score when refusing.
 - `rag.eval`: runs `evals/cases.jsonl` through the same `ask()` function the chat uses. See [evaluation.md](evaluation.md).

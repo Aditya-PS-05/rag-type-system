@@ -116,18 +116,25 @@ def evidence_by_source(quotes: list[Quote], hits: list[SearchHit]) -> dict[int, 
 
 def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, history: list[dict] | None = None,
         k: int = 8, doc_types: list[str] | None = None, strict: bool = True, reranker=None,
-        on_token: Callable[[str], None] | None = None) -> Answer:
+        on_token: Callable[[str], None] | None = None,
+        on_stage: Callable[[str], None] | None = None) -> Answer:
     """Answer from the documents only.
 
     strict=True fact-checks every claim and removes unsupported ones before returning (nothing is streamed).
     strict=False streams the answer and only reports citation problems.
+    on_stage is called with "rewrite", "retrieve", "evidence", "answer" and "check" as each step starts.
     """
+    stage = on_stage or (lambda name: None)
+    if history:
+        stage("rewrite")
     search_query = rewrite_question(llm, history or [], question)
+    stage("retrieve")
     hits = retrieve(store, llm, cfg, search_query, k, doc_types, reranker=reranker)
     threshold = cfg.min_rerank_score if reranker else cfg.min_score
     if not hits or max(h.score for h in hits) < threshold:
         return Answer(REFUSAL, hits, search_query, gated=True)
 
+    stage("evidence")
     quotes = select_evidence(llm, search_query, hits)
     verified = [q for q in quotes if q.verified]
     if not verified:
@@ -135,6 +142,7 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
 
     messages = [{"role": "system", "content": ANSWER_PROMPT},
                 {"role": "user", "content": f"Evidence quotes:\n{format_evidence(verified, hits)}\n\nQuestion: {search_query}"}]
+    stage("answer")
     parts = []
     for token in llm.chat_stream(messages):
         parts.append(token)
@@ -146,6 +154,7 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
     grounding = check_citations(text, set(evidence))
     removed: list[Claim] = []
     if strict and grounding.claims:
+        stage("check")
         verify_claims(llm, grounding, evidence)
         removed = grounding.problems
         if removed:

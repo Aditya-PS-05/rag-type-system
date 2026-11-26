@@ -75,3 +75,13 @@ def test_chunk_neighbors_returns_adjacent_chunks(store):
                           chunks=[Chunk(i, None, f"part {i}", [1, 0, 0, 0]) for i in range(4)])
     doc_id = store.search([1, 0, 0, 0], team="a", embed_model="m", k=1)[0].document_id
     assert store.chunk_neighbors([(doc_id, 2)]) == {(doc_id, 1): "part 1", (doc_id, 3): "part 3"}
+
+
+def test_corpus_fingerprint_changes_when_documents_change(store):
+    add(store, "a", "one.txt", "text", [1, 0, 0, 0])
+    before = store.corpus_fingerprint("a", "m")
+    assert before.startswith("1 docs, 1 chunks")
+    assert store.corpus_fingerprint("a", "m") == before
+    add(store, "a", "one.txt", "text", [1, 0, 0, 0], chash="h2")
+    assert store.corpus_fingerprint("a", "m") != before
+    assert store.corpus_fingerprint("b", "m").startswith("0 docs")

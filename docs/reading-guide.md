@@ -38,8 +38,10 @@ Start at `rag/qa.py: ask()` and step into each call:
 Read the three prompts at the top of `rag/qa.py` and `VERIFY_PROMPT` in `rag/grounding.py`; they are short and explain intent.
 
 ## 4. The interfaces (10 min)
+- `rag/web.py`: `App.ask` calls `ask()` with `on_stage`/`on_token` callbacks and streams them; `answer_to_json` is everything the page shows. The page is `rag/static/index.html` (`finish()` renders an answer, `renderInspector()` the evidence).
 - `rag/chat.py`: `handle()` calls `ask()`; `print_report` shows everything `Answer` carries (gate score, quotes, removed sentences).
 - `rag/eval.py`: the same `ask()` over `evals/cases.jsonl`; see how facts, traps and follow-ups are scored.
+- `rag/calibrate.py`: retrieval only; `choose_threshold` picks the gate, `apply` loads it at startup and detects stale fingerprints.
 
 ## 5. Tests as executable examples
 | Test | Shows |
@@ -56,7 +58,7 @@ Read the three prompts at the top of `rag/qa.py` and `VERIFY_PROMPT` in `rag/gro
 | Want to… | Change |
 |---|---|
 | Use another LLM or embedding model | env vars in `rag/config.py`; re-ingest after changing the embedder |
-| Tune refusals | `RAG_MIN_RERANK_SCORE`, then re-calibrate with `rag.eval` |
+| Tune refusals | add labelled questions to `evals/cases.jsonl`, run `python -m rag.calibrate` |
 | Add a document type | a loader in `rag/loaders.py` + a branch in `load_manifest` |
 | Change retrieval | constants at the top of `rag/retrieval.py` |
 | Update a diagram | edit `docs/architecture/*.eraser`, run `python3 scripts/eraser_to_mermaid.py` |

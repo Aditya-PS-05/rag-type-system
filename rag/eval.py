@@ -7,6 +7,7 @@ Case kinds:
 Any case may add "history": [earlier questions] to test follow-up handling.
 
 Usage: uv run python -m rag.eval [--cases evals/cases.jsonl] [--fast] [--min-pass 0.9] [--only fact,trap]
+                                [--split all|tune|test]
 """
 
 import argparse
@@ -15,6 +16,7 @@ import sys
 import time
 from pathlib import Path
 
+from rag import calibrate
 from rag.config import Settings
 from rag.ollama import Ollama
 from rag.qa import ask
@@ -46,15 +48,20 @@ def main():
     ap.add_argument("--fast", action="store_true", help="skip claim fact-checking")
     ap.add_argument("--min-pass", type=float, default=0.9)
     ap.add_argument("--only", help="comma-separated case kinds to run: fact,image,trap")
+    ap.add_argument("--split", choices=["all", "tune", "test"], default="all",
+                    help="run only the calibration tune set or the held-out test set")
     args = ap.parse_args()
 
     cfg = Settings()
     store = VectorStore(cfg.database_url, cfg.embed_dim)
     llm = Ollama(cfg.ollama_url, cfg.embed_model, cfg.chat_model)
     reranker = Reranker(cfg.rerank_model) if cfg.use_reranker else None
+    cfg, gate_note = calibrate.apply(cfg, store, reranker is not None)
     cases = [json.loads(l) for l in Path(args.cases).read_text().splitlines() if l.strip()]
     if args.only:
         cases = [c for c in cases if kind_of(c) in args.only.split(",")]
+    if args.split != "all":
+        cases = [c for c in cases if calibrate.split_of(c) == args.split]
 
     rows, started = [], time.time()
     for case in cases:
@@ -87,8 +94,8 @@ def main():
     answerable_tops = [r["top"] for r in rows if kind_of(r["case"]) != "trap"]
     passed = total("passed")
 
-    gate = f"reranker on, min_rerank_score {cfg.min_rerank_score}" if reranker else f"reranker off, min_score {cfg.min_score}"
-    print(f"\nModel {cfg.chat_model}, {gate}, {'fast' if args.fast else 'strict'} mode, "
+    gate = f"reranker {'on' if reranker else 'off'}, {gate_note}"
+    print(f"\nModel {cfg.chat_model}, {gate}, {'fast' if args.fast else 'strict'} mode, {args.split} cases, "
           f"{time.time() - started:.0f}s")
     print(f"  factual answers correct : {rate('fact')}")
     print(f"  image questions         : {rate('image')}")

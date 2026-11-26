@@ -1,0 +1,26 @@
+{
+  "default/jinaai/jina-reranker-v1-turbo-en": {
+    "calibrated_at": "2026-11-26T10:59:09+00:00",
+    "cases": {
+      "test": 7,
+      "tune": 37
+    },
+    "fingerprint": {
+      "corpus": "155 docs, 3537 chunks, 9000a10a4263",
+      "embed_model": "nomic-embed-text",
+      "scorer": "jinaai/jina-reranker-v1-turbo-en",
+      "team": "default"
+    },
+    "min_recall": 1.0,
+    "setting": "min_rerank_score",
+    "test": {
+      "answerable_refused": "0/4",
+      "traps_gated": "3/3"
+    },
+    "threshold": 0.501,
+    "tune": {
+      "answerable_refused": "0/27",
+      "traps_gated": "7/10"
+    }
+  }
+}

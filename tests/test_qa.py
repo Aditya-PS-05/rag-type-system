@@ -119,3 +119,16 @@ def test_follow_up_is_rewritten_before_search():
     result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did it arrive?", history=history)
     assert llm.queries == ["When did Juno arrive at Jupiter?"]
     assert result.search_query == "When did Juno arrive at Jupiter?"
+
+
+def test_stages_are_reported_in_order():
+    llm = FakeLLM(ids=["1.1"], answer="Juno arrived at Jupiter on July 5, 2016 [1].",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": True, "reason": ""}]}])
+    stages = []
+    ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive?", on_stage=stages.append)
+    assert stages == ["retrieve", "evidence", "answer", "check"]
+
+    gated = []
+    ask(FakeStore([hit("text", "Milky Way", score=0.5)]), FakeLLM(), Settings(min_score=0.65), "pizza?",
+        on_stage=gated.append)
+    assert gated == ["retrieve"]

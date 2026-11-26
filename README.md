@@ -22,7 +22,7 @@ bot> Voyager 1 was launched on September 5, 1977 [2].
 
 you> What is the capital of France?
 bot> I don't know based on the available documents.
-(no source was relevant enough: best match 0.06 < threshold 0.30; the model was not called)
+(no source was relevant enough: best match 0.06 < threshold 0.50; the model was not called)
 ```
 
 ## Quickstart
@@ -39,7 +39,8 @@ uv sync
 
 python3 scripts/download_dataset.py data/raw   # 35 Wikipedia articles, 20 arXiv PDFs, 100 NASA images (~100 MB)
 uv run python -m rag.ingest data/raw           # chunk + embed + store (~1-2 min)
-uv run python -m rag.chat                      # first run downloads the reranker (150 MB) into models/
+uv run python -m rag.web                       # web app on http://127.0.0.1:8000 (or rag.chat for the terminal)
+                                               # first run downloads the reranker (150 MB) into models/
 ```
 
 After the first run nothing needs the internet.
@@ -48,13 +49,15 @@ After the first run nothing needs the internet.
 
 | Command | What it does |
 |---|---|
-| `uv run python -m rag.chat` | Interactive chat (strict mode: every claim fact-checked) |
+| `uv run python -m rag.web` | **Web app** at http://127.0.0.1:8000: chat, live pipeline steps, clickable citations, evidence and fact-check inspector, image thumbnails, document library |
+| `uv run python -m rag.chat` | Terminal chat (strict mode: every claim fact-checked) |
 | `uv run python -m rag.chat -q "..."` | One question, then exit |
 | `uv run python -m rag.chat --fast` | Stream answers, skip claim fact-checking (warnings only) |
 | `uv run python -m rag.chat --show-evidence` | Also print the exact quotes each answer was built from |
 | `uv run python -m rag.chat --type pdf,image` | Search only some document types |
 | `uv run python -m rag.ingest data/raw [--force]` | Index new/changed documents (unchanged ones are skipped) |
-| `uv run python -m rag.eval [--fast]` | Run the grounding evaluation (`evals/cases.jsonl`) |
+| `uv run python -m rag.eval [--fast] [--split test]` | Run the grounding evaluation (`evals/cases.jsonl`); `--split test` = held-out questions only |
+| `uv run python -m rag.calibrate` | Pick the relevance-gate threshold from the eval questions and save it to `calibration.json` |
 | `uv run pytest` | Unit + integration tests (integration tests need the database) |
 
 Chat commands: `/sources` (list indexed documents), `/strict`, `/evidence`, `/help`, `exit`.
@@ -80,7 +83,8 @@ Evaluation set: 29 factual questions (incl. 4 follow-ups and a comparison), 2 im
 | V1 basic RAG | n/a | n/a | n/a | not evaluated; misread a date in manual testing |
 | V2 guardrails | 34 | 24/24 | 8/8 (all by the gate) | |
 | V3 evidence-first | 44 | 26/29 | 13/13 | 0/74 invented evidence IDs; ~11 s per answer |
-| V4 hybrid retrieval | 44 | **27/29** | **13/13** (9 by the gate) | 0/99 invented IDs; ~11 s per answer |
+| V4 hybrid retrieval | 44 | 27/29 | 13/13 (9 by the gate) | 0/99 invented IDs; ~11 s per answer |
+| V4.1 calibrated gate | 44 | **27/29** | **13/13** (10 by the gate) | gate 0.501 chosen on 37 questions; 0/4 answerable refused on 7 held out |
 
 Version history: [docs/versions.md](docs/versions.md) · Full results: [docs/evaluation.md](docs/evaluation.md)
 
@@ -98,7 +102,10 @@ rag/rerank.py                 local ONNX cross-encoder reranker
 rag/retrieval.py              hybrid retrieval, fusion, reranking, neighbouring chunks
 rag/grounding.py              sentence IDs, citation check, claim fact-check, removal
 rag/qa.py                     the answer pipeline (steps 1-7 above)
+rag/calibrate.py              gate calibration: tune/test split, threshold choice, staleness check
+rag/web.py, rag/static/       local web app (standard library server + one offline HTML page)
 rag/ingest.py, chat.py, eval.py   command-line entry points
+calibration.json              calibrated gate thresholds + what they depend on
 evals/cases.jsonl             evaluation questions
 docs/                         design documentation and architecture diagrams
 ```
@@ -112,17 +119,31 @@ docs/                         design documentation and architecture diagrams
 | `EMBED_MODEL` / `EMBED_DIM` | `nomic-embed-text` / `768` | Embedding model and vector size |
 | `CHAT_MODEL` | `qwen3:4b-instruct` | Model for rewriting, evidence selection, answers, fact checks |
 | `RAG_RERANK` / `RERANK_MODEL` | `1` / `jinaai/jina-reranker-v1-turbo-en` | Reranker on/off and model |
-| `RAG_MIN_RERANK_SCORE` | `0.3` | Gate threshold on reranker score |
-| `RAG_MIN_SCORE` | `0.68` | Gate threshold on cosine similarity (used when `RAG_RERANK=0`) |
+| `RAG_MIN_RERANK_SCORE` | from `calibration.json` (0.501), else `0.3` | Gate threshold on reranker score; setting it overrides calibration |
+| `RAG_MIN_SCORE` | from `calibration.json`, else `0.68` | Gate threshold on cosine similarity (used when `RAG_RERANK=0`) |
+| `RAG_CALIBRATION` | `calibration.json` | Where calibrated thresholds are stored |
 | `RAG_TEAM` | `default` | Team whose documents are indexed and searched |
 
-## Limits
+## Known limitations
 
-- Images are understood only through their text metadata, not pixels.
-- PDF tables and figures become rough text.
-- A 4B model on a laptop: ~10 s per strict answer. Larger models are more faithful and slower.
-- The fact checker is an LLM: it reduces unsupported claims, it does not prove their absence.
-- The default database password is for local use only.
+**Thresholds and tuning**
+- **The gate threshold is only valid for this setup.** It is calibrated (`rag.calibrate`) for one corpus, embedder and reranker, and saved with a fingerprint of them; chat and eval warn when any changes. A new corpus needs labelled questions and a re-run.
+- **The evaluation set is small.** 44 questions, 37 to tune and 7 held out. The held-out score is a sanity check, not a reliable estimate.
+- **The gate cannot catch on-topic traps.** Questions on-topic but not answered by the documents score 0.15–0.87, overlapping real questions (0.66–0.99). Only evidence selection by the 4B model stops them, which is likely but not guaranteed.
+- **The gate looks at one number:** the best chunk's score, not the gap to the others or agreement between keyword and vector search.
+- **Other parameters were set by hand,** some to fix a single question: top-8 chunks, ±1 sentence context, 1,200-char chunks, 10 evidence sentences, rerank pool 24. Only the first 40 sentences of each source can be cited.
+
+**Answer quality**
+- **The fact checker is the same 4B model that wrote the answer,** so their mistakes are correlated. It reduces unsupported claims but does not prove their absence, and it sometimes removes correct ones (e.g. a comparison citing only one side).
+- **Comparisons and multi-step questions need every fact cited,** and the 4B model's evidence choice varies between similar questions.
+
+**System**
+- About 10 s per strict answer: 4 sequential LLM calls on a laptop; strict mode cannot stream.
+- Images are understood only through their text metadata, not pixels; PDF tables and figures become rough text.
+- Keyword search is English-only.
+- Teams are separated by a `team` column with no authentication; the default database password is for local use only. The shared deployment (V5) is not built.
+
+Planned fixes, in order: a larger labelled set (~150 questions) → a gate that combines several signals → an independent checker model. See [docs/evaluation.md](docs/evaluation.md).
 
 ## Documentation
 

@@ -46,5 +46,10 @@ Each version fixed the biggest weakness of the previous one. Diagrams: [architec
 **Fixed:** Kepler and Perseverance chunks now rank first (scores 0.97–1.0); the Hubble mirror and Apollo commander questions answer correctly. Score 42/44, 9 of 13 traps stopped before the LLM, 0/99 invented evidence IDs.
 **Cost:** +0.7 s per question. (`bge-reranker-v2-m3` was tried: same ranking, 6.3 s → rejected.)
 
+## V4.1: Calibrated gate
+**Added:** `rag.calibrate` picks the threshold from labelled questions on a tune split, reports it on a held-out test split, and saves it with a fingerprint of the corpus, embedder and reranker. Chat and eval load it and warn when it is stale.
+**Fixed:** the hand-picked 0.3 → calibrated 0.501. No answerable question refused on either split; 10 of 13 traps now stopped before the LLM (was 9). The threshold no longer silently goes wrong when the documents or models change.
+**Problem left:** the test split is only 7 questions, and on-topic traps still overlap real questions. Next: a larger labelled set, then a gate that combines several signals.
+
 ## V5: Shared team deployment (proposed, not built)
 Document watcher → ingest workers → MinIO for raw files + replicated Postgres/pgvector with team and embedding-model tags. Team apps → one RAG API service → shared embedding server, reranker, LLM server. See [team-deployment.md](team-deployment.md).

@@ -8,6 +8,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from rag import calibrate
 from rag.config import Settings
 from rag.ollama import Ollama
 from rag.qa import Answer, ask
@@ -84,6 +85,9 @@ def main():
     store = VectorStore(cfg.database_url, cfg.embed_dim)
     llm = Ollama(cfg.ollama_url, cfg.embed_model, cfg.chat_model)
     reranker = Reranker(cfg.rerank_model) if cfg.use_reranker else None
+    cfg, gate_note = calibrate.apply(cfg, store, reranker is not None)
+    if "STALE" in gate_note:
+        print(f"warning: {gate_note}", file=sys.stderr)
     doc_types = args.type.split(",") if args.type else None
     data_dir = Path(args.data_dir).resolve()
     history: list[dict] = []
@@ -114,7 +118,8 @@ def main():
 
     mode = "strict" if strict else "fast"
     rerank = "reranker on" if reranker else "reranker off"
-    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}, {rerank}, {mode} mode). Type /help for commands.\n")
+    print(f"Local RAG chat ({cfg.chat_model} + {cfg.embed_model}, {rerank}, {mode} mode, {gate_note}). "
+          f"Type /help for commands.\n")
     while True:
         try:
             question = input("you> ").strip()

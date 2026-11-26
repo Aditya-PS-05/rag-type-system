@@ -21,10 +21,30 @@ Traps come in two kinds: **general knowledge** the model knows but the documents
 
 ## Calibrating the gate
 ```bash
-RAG_MIN_RERANK_SCORE=0 uv run python -m rag.eval --min-pass 0   # gate off: see raw scores
+uv run python -m rag.calibrate              # score every case, choose, save to calibration.json
+uv run python -m rag.calibrate --dry-run    # report only
+uv run python -m rag.eval --split test      # full pipeline on the held-out questions
 ```
-Pick a threshold below the lowest answerable score and above most general-knowledge traps.
-Current calibration (reranker): general-knowledge traps 0.01–0.11, near-miss traps 0.15–0.87, answerable 0.66–0.99 → threshold 0.3. Near-miss traps will overlap; they are handled by evidence selection, not the gate. Redo this when the documents, embedding model or reranker change.
+- **Only retrieval runs**, so calibration takes about 25 s, not 9 minutes.
+- **Split:** each case is assigned to *tune* (~70%) or *test* (~30%) by a hash of its question, so the split is stable. Add `"split": "test"` to a case to pin it.
+- **Rule:** on the tune split, keep every answerable question above the gate (`--min-recall 1.0`). Then place the threshold halfway between the lowest answerable score and the highest trap score below it. That gives the widest margin on both sides.
+- **Saved with a fingerprint:** team, embedding model, scorer (reranker or cosine) and corpus (document hashes and chunk counts). Chat and eval print `STALE` when any of these differ. A threshold set in an environment variable always wins.
+
+Current calibration (reranker, 155 docs / 3,537 chunks):
+
+| | Scores |
+|---|---|
+| Answerable (tune) | 0.66–0.99 |
+| General-knowledge traps | 0.01–0.11 |
+| On-topic traps | 0.15–0.87 |
+| **Threshold** | **0.501** (hand-set before: 0.3) |
+
+| Split | Answerable wrongly refused | Traps stopped by the gate |
+|---|---|---|
+| Tune | 0/27 | 7/10 |
+| Test | 0/4 | 3/3 |
+
+On-topic traps above the gate (Gagarin's breakfast 0.69, NASA tweets 0.79, Europa Clipper cost in euros 0.87) still need evidence selection to refuse them. The test split has only 7 questions; growing the set is the next step.
 
 ## Results history
 | Version | Set | Facts | Images | Traps | Other |
@@ -35,7 +55,8 @@ Current calibration (reranker): general-knowledge traps 0.01–0.11, near-miss t
 | V3 | 44 | 26/29 | 2/2 | 13/13 | 0/74 invented IDs, 10 claims removed, 535 s |
 | V4, gate off | 44 | 25/29 | 2/2 | 13/13 (model refused) | 0/87 invented IDs; used for calibration |
 | V4 | 44 | 27/29 | 2/2 | 13/13 (9 by gate) | 0/99 invented IDs, 7 claims removed, 536 s |
+| V4.1 (gate 0.501) | 44 | 27/29 | 2/2 | 13/13 (10 by gate) | 0/99 invented IDs, 7 claims removed, 602 s; held-out split 7/7 |
 
-Remaining V4 failures (42/44):
+Remaining V4/V4.1 failures (42/44, same two):
 - *"Hubble or Kepler first?"*: correct answer removed. It cited only the Hubble quote, so the checker saw no Kepler evidence. Comparisons need every compared fact cited.
 - *Perseverance follow-up*: answered with coordinates instead of the crater name (the non-follow-up version passed). The 4B model's evidence choice varies.

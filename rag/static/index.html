@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grounded Space Archive</title>
+<style>
+/* Layout: library rail | conversation | evidence inspector. Offline: system fonts only, no external requests. */
+:root {
+  --bg: #f3f4f7; --panel: #ffffff; --sunk: #eceef3; --ink: #141a26; --muted: #5b6475; --line: #dadee6;
+  --accent: #0b7480; --accent-soft: #dcf0f1; --ok: #23824f; --ok-soft: #e0f2e8; --warn: #a8640c; --warn-soft: #fbeedb;
+  --bad: #b8322f; --bad-soft: #fbe4e3; --user: #1d2b44; --user-ink: #f2f5fa;
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0e1118; --panel: #151a24; --sunk: #0b0e14; --ink: #e5e9f1; --muted: #949db0; --line: #262d3a;
+  --accent: #4cc3cc; --accent-soft: #123338; --ok: #5ccb8d; --ok-soft: #13301f; --warn: #eaa75a; --warn-soft: #33240f;
+  --bad: #f07d79; --bad-soft: #3a1a19; --user: #263552; --user-ink: #eef2f8;
+  color-scheme: dark;
+} }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14.5px/1.55 var(--sans); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+
+.app { height: 100%; display: grid; grid-template-columns: 270px minmax(0, 1fr) 400px; }
+
+/* library */
+.library { display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.brand { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
+.brand h1 { margin: 0; font-size: 1.05rem; letter-spacing: -0.01em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 8px; }
+.settings { padding: 14px 18px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
+.switch { display: flex; align-items: flex-start; gap: 10px; }
+.switch input { margin-top: 3px; accent-color: var(--accent); }
+.switch small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.types { display: flex; gap: 6px; flex-wrap: wrap; }
+.types label { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; cursor: pointer; }
+.types input { accent-color: var(--accent); margin: 0; }
+.kline { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.kline input { flex: 1; accent-color: var(--accent); }
+.docs { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px 0; }
+.docs input[type=search] { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--sunk); margin-bottom: 8px; }
+.doclist { overflow: auto; flex: 1; margin: 0 -8px; padding: 0 8px 16px; }
+.doclist h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin: 12px 0 4px; display: flex; justify-content: space-between; }
+.doclist button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 4px 8px; border-radius: 5px; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doclist button:hover, .doclist button:focus-visible { background: var(--sunk); }
+.stats { padding: 10px 18px; border-top: 1px solid var(--line); font: 11.5px/1.5 var(--mono); color: var(--muted); }
+
+/* conversation */
+.chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+.topbar .model { font-family: var(--mono); }
+.topbar .spacer { flex: 1; }
+.lib-toggle, .close-insp { display: none !important; }
+.ghost { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; }
+.ghost:hover { border-color: var(--muted); }
+.gate-pill { font-family: var(--mono); padding: 2px 8px; border-radius: 999px; background: var(--sunk); }
+.gate-pill.stale { background: var(--warn-soft); color: var(--warn); }
+
+.thread { flex: 1; overflow: auto; padding: 24px 20px 12px; }
+.thread-inner { max-width: 760px; margin: 0 auto; display: grid; gap: 18px; }
+.empty { padding: 8vh 0 0; }
+.empty h2 { font-size: 1.5rem; margin: 0 0 6px; letter-spacing: -0.015em; text-wrap: balance; }
+.empty p { color: var(--muted); margin: 0 0 18px; max-width: 60ch; }
+.examples { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.examples button { text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.examples button:hover { border-color: var(--accent); }
+.examples small { display: block; color: var(--muted); font-size: 12px; }
+
+.msg-user { justify-self: end; max-width: 80%; background: var(--user); color: var(--user-ink); padding: 9px 14px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-bot { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.msg-bot.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.msg-bot.refusal { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.answer p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.answer p:last-child { margin: 0; }
+.cite { all: unset; cursor: pointer; font: 600 11px/1 var(--mono); padding: 2px 5px; margin: 0 1px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+.cite:hover, .cite:focus-visible { background: var(--accent); color: var(--panel); }
+.refusal-why { font-size: 13px; color: var(--muted); }
+.refusal-why b { color: var(--ink); }
+
+.pipeline { display: flex; flex-wrap: wrap; gap: 4px; font: 11.5px/1 var(--mono); }
+.step { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.step::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; }
+.step.active { color: var(--accent); }
+.step.active::before { opacity: 1; animation: pulse 1s infinite; }
+.step.done { color: var(--ok); }
+.step.done::before { opacity: 1; }
+.step.stop { color: var(--warn); background: var(--warn-soft); }
+.step.skip { opacity: .45; }
+@keyframes pulse { 50% { transform: scale(1.8); opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .step.active::before { animation: none; } }
+
+.meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.chip { padding: 2px 8px; border-radius: 999px; background: var(--sunk); font-family: var(--mono); font-size: 11.5px; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.removed { border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 6px; font-size: 13px; }
+.removed summary { cursor: pointer; margin: 0; }
+.removed s { color: var(--bad); text-decoration-thickness: 1px; }
+.removed small { display: block; color: var(--muted); }
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.thumbs button { all: unset; cursor: pointer; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); width: 128px; }
+.thumbs img { display: block; width: 128px; height: 92px; object-fit: cover; }
+.thumbs span { display: block; font-size: 11.5px; padding: 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.error { color: var(--bad); }
+
+.composer { padding: 12px 20px 18px; }
+.composer form { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 8px 8px 14px; }
+.composer form:focus-within { border-color: var(--accent); }
+.composer textarea { flex: 1; border: 0; outline: 0; resize: none; background: transparent; max-height: 160px; padding: 6px 0; }
+.send { border: 0; border-radius: 8px; padding: 8px 16px; background: var(--accent); color: var(--panel); font-weight: 600; }
+.send:disabled { opacity: .45; cursor: default; }
+.composer .hint { max-width: 760px; margin: 6px auto 0; font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+/* inspector */
+.inspector { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+.insp-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.insp-head h2 { margin: 0; font-size: .95rem; }
+.insp-body { overflow: auto; padding: 14px 18px 24px; display: grid; gap: 18px; align-content: start; }
+.insp-empty { color: var(--muted); font-size: 13px; }
+.source { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; scroll-margin: 12px; }
+.source.flash { animation: flash 1.2s; }
+@keyframes flash { 0%, 40% { box-shadow: 0 0 0 2px var(--accent); } }
+.source img { display: block; width: 100%; max-height: 220px; object-fit: cover; background: var(--sunk); }
+.src-head { padding: 10px 12px 6px; display: grid; gap: 4px; }
+.src-title { display: flex; gap: 8px; align-items: baseline; font-weight: 600; font-size: 13.5px; }
+.src-title .n { font: 600 11px var(--mono); color: var(--accent); flex: none; }
+.src-sub { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.bar { width: 60px; height: 5px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.quote { margin: 0 12px 8px; padding: 6px 10px; border-left: 3px solid var(--ok); background: var(--ok-soft); font-size: 13px; border-radius: 0 6px 6px 0; overflow-wrap: anywhere; }
+.excerpt { margin: 0; padding: 8px 12px 10px; font-size: 12.5px; color: var(--muted); max-height: 7.5em; overflow: hidden; position: relative; overflow-wrap: anywhere; }
+.excerpt.open { max-height: none; }
+.more { all: unset; cursor: pointer; font-size: 12px; color: var(--accent); padding: 0 12px 10px; display: inline-block; }
+.claims { display: grid; gap: 6px; }
+.claim { font-size: 13px; padding: 7px 10px; border-radius: 7px; background: var(--sunk); display: grid; gap: 2px; }
+.claim .verdict { font: 600 11px var(--mono); }
+.claim.ok .verdict { color: var(--ok); }
+.claim.bad .verdict { color: var(--bad); }
+.claim small { color: var(--muted); }
+details.others summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+details.others .source { margin-top: 8px; }
+.scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .35); z-index: 25; }
+/* responsive rules last so they override the base layout */
+@media (max-width: 1180px) { .app { grid-template-columns: 240px minmax(0, 1fr); } .inspector { position: fixed; inset: 0 0 0 auto; width: min(420px, 100%); z-index: 30; box-shadow: -12px 0 40px rgb(0 0 0 / .25); } .inspector:not(.open) { display: none; } .close-insp { display: inline-flex !important; } }
+@media (max-width: 760px) { .app { grid-template-columns: minmax(0, 1fr); } .library { display: none; } .library.open { display: flex; position: fixed; inset: 0; z-index: 30; } .lib-toggle { display: inline-flex !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="library" id="library" aria-label="Library and settings">
+    <div class="brand">
+      <h1>Grounded Space Archive</h1>
+      <p>Answers only from the indexed documents, with every sentence checked.</p>
+    </div>
+    <div class="settings">
+      <label class="switch"><input type="checkbox" id="strict" checked>
+        <span>Strict fact-check<small>Check every sentence and remove unsupported ones. Off streams faster and only warns.</small></span></label>
+      <div>
+        <p class="section-label">Search in</p>
+        <div class="types" id="types">
+          <label><input type="checkbox" value="text" checked>Articles</label>
+          <label><input type="checkbox" value="pdf" checked>Papers</label>
+          <label><input type="checkbox" value="image" checked>Images</label>
+        </div>
+      </div>
+      <div>
+        <p class="section-label">Sources per answer</p>
+        <div class="kline"><input type="range" id="k" min="3" max="12" value="8" aria-label="Sources per answer"><output id="kOut" class="chip">8</output></div>
+      </div>
+    </div>
+    <div class="docs">
+      <p class="section-label">Library</p>
+      <input type="search" id="docFilter" placeholder="Filter documents" aria-label="Filter documents">
+      <div class="doclist" id="doclist"><p class="insp-empty">Loading…</p></div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </aside>
+
+  <main class="chat">
+    <div class="topbar">
+      <button class="ghost lib-toggle" id="libToggle" type="button">Library</button>
+      <span class="model" id="model">connecting…</span>
+      <span class="gate-pill" id="gate" title="Relevance gate"></span>
+      <span class="spacer"></span>
+      <button class="ghost" id="newChat" type="button">New chat</button>
+      <button class="ghost close-insp" id="openInsp" type="button">Evidence</button>
+    </div>
+    <div class="thread" id="thread"><div class="thread-inner" id="threadInner">
+      <section class="empty" id="empty">
+        <h2>Ask about spaceflight, telescopes and planetary missions</h2>
+        <p>35 Wikipedia articles, 20 arXiv papers and 100 NASA images, searched on this machine. If the documents don't say it, you'll get "I don't know" instead of a guess.</p>
+        <div class="examples" id="examples"></div>
+      </section>
+    </div></div>
+    <div class="composer">
+      <form id="form">
+        <textarea id="input" rows="1" placeholder="Ask a question…" aria-label="Question"></textarea>
+        <button class="send" id="send" type="submit">Ask</button>
+      </form>
+      <div class="hint"><span>Enter to send · Shift+Enter for a new line</span><span>Follow-ups like "when did it launch?" use the conversation</span></div>
+    </div>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="Evidence">
+    <div class="insp-head"><h2 id="inspTitle">Evidence</h2><button class="ghost close-insp" id="closeInsp" type="button">Close</button></div>
+    <div class="insp-body" id="inspBody"><p class="insp-empty">Select an answer to see the sources it was built from, the exact quotes, and how each sentence was checked.</p></div>
+  </aside>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const TYPE_LABEL = { text: "article", pdf: "paper", image: "image" };
+const STEPS = [["rewrite", "Rewrite"], ["retrieve", "Retrieve"], ["gate", "Gate"], ["evidence", "Evidence"], ["answer", "Answer"], ["check", "Fact-check"]];
+const EXAMPLES = [
+  ["When did Voyager 1 enter interstellar space?", "A fact from the articles"],
+  ["Show me pictures of the International Space Station", "Searches the NASA images"],
+  ["Which was launched first, Hubble or the Kepler space telescope?", "A comparison across sources"],
+  ["What is the capital of France?", "Not in the documents, so it refuses"],
+];
+
+let history = [], turns = [], busy = false, selected = null, info = null;
+
+/* ---------- setup ---------- */
+$("examples").innerHTML = EXAMPLES.map(([q, d]) => `<button type="button" data-q="${esc(q)}">${esc(q)}<small>${esc(d)}</small></button>`).join("");
+$("examples").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if (b) send(b.dataset.q); });
+$("k").addEventListener("input", () => { $("kOut").textContent = $("k").value; });
+
+fetch("/api/info").then(r => r.json()).then(d => {
+  info = d;
+  $("model").textContent = `${d.chat_model} · ${d.embed_model}${d.reranker ? " · reranked" : ""}`;
+  $("gate").textContent = `gate ${d.threshold}`;
+  $("gate").title = d.gate;
+  if (/STALE|not calibrated/.test(d.gate)) $("gate").classList.add("stale");
+  $("stats").innerHTML = d.stats.map(s => `${esc(s.doc_type)}: ${s.documents} docs, ${s.chunks} chunks`).join("<br>") + `<br>team: ${esc(d.team)}`;
+}).catch(() => { $("model").textContent = "server not reachable"; });
+
+let docs = [];
+fetch("/api/documents").then(r => r.json()).then(d => { docs = d; renderDocs(); });
+function renderDocs() {
+  const f = $("docFilter").value.trim().toLowerCase();
+  const groups = { text: [], pdf: [], image: [] };
+  docs.filter(d => !f || d.title.toLowerCase().includes(f)).forEach(d => groups[d.doc_type]?.push(d.title));
+  $("doclist").innerHTML = Object.entries(groups).filter(([, t]) => t.length).map(([type, titles]) =>
+    `<h3><span>${type === "text" ? "Articles" : type === "pdf" ? "Papers" : "Images"}</span><span>${titles.length}</span></h3>` +
+    titles.map(t => `<button type="button" title="${esc(t)}" data-title="${esc(t)}" data-type="${type}">${esc(t)}</button>`).join("")
+  ).join("") || '<p class="insp-empty">No matches.</p>';
+}
+$("docFilter").addEventListener("input", renderDocs);
+$("doclist").addEventListener("click", e => {
+  const b = e.target.closest("[data-title]"); if (!b) return;
+  $("input").value = b.dataset.type === "image" ? `Show me the image "${b.dataset.title}"` : `Tell me about ${b.dataset.title}`;
+  $("input").focus(); autosize(); closePanels();
+});
+
+/* ---------- composer ---------- */
+const input = $("input");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); } });
+$("form").addEventListener("submit", e => { e.preventDefault(); send(input.value); });
+$("newChat").addEventListener("click", () => {
+  if (busy) return;
+  history = []; turns = []; selected = null;
+  $("threadInner").querySelectorAll(".msg-user, .msg-bot").forEach(n => n.remove());
+  $("empty").hidden = false; renderInspector(null); input.focus();
+});
+
+/* ---------- asking ---------- */
+async function send(question) {
+  question = question.trim();
+  if (!question || busy) return;
+  busy = true; $("send").disabled = true; $("empty").hidden = true;
+  input.value = ""; autosize();
+  const strict = $("strict").checked;
+  const types = [...$("types").querySelectorAll("input:checked")].map(i => i.value);
+
+  const userEl = document.createElement("div");
+  userEl.className = "msg-user"; userEl.textContent = question;
+  const bot = document.createElement("article");
+  bot.className = "msg-bot"; bot.tabIndex = 0;
+  bot.innerHTML = `<div class="pipeline">${STEPS.map(([k, l]) => `<span class="step" data-step="${k}">${l}</span>`).join("")}</div><div class="answer"></div>`;
+  $("threadInner").append(userEl, bot);
+  scrollDown();
+
+  const turn = { question, strict, el: bot, answer: null, streamed: "" };
+  turns.push(turn);
+  if (!history.length) bot.querySelector('[data-step="rewrite"]').classList.add("skip");
+
+  try {
+    const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history, strict, types: types.length === 3 ? [] : types, k: +$("k").value }) });
+    if (!res.ok || !res.body) throw new Error(`The server answered ${res.status}.`);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (line.trim()) handleEvent(turn, JSON.parse(line)); }
+    }
+    if (!turn.answer && !turn.error) throw new Error("The answer stopped before it finished.");
+  } catch (err) {
+    showError(turn, err.message || String(err));
+  } finally {
+    busy = false; $("send").disabled = false; input.focus();
+  }
+}
+
+function setStep(turn, name) {
+  const order = STEPS.map(s => s[0]), idx = order.indexOf(name);
+  turn.el.querySelectorAll(".step").forEach(s => {
+    const j = order.indexOf(s.dataset.step);
+    if (s.classList.contains("skip")) return;
+    s.classList.toggle("done", j < idx); s.classList.toggle("active", j === idx);
+  });
+  if (name === "evidence" || name === "answer" || name === "check") {
+    const g = turn.el.querySelector('[data-step="gate"]'); g.classList.add("done"); g.classList.remove("active");
+  }
+}
+
+function handleEvent(turn, ev) {
+  if (ev.type === "stage") setStep(turn, ev.name);
+  else if (ev.type === "token") {
+    turn.streamed += ev.text;
+    turn.el.querySelector(".answer").innerHTML = formatAnswer(turn.streamed);
+    scrollDown();
+  } else if (ev.type === "result") finish(turn, ev.answer);
+  else if (ev.type === "error") showError(turn, ev.message);
+}
+
+function showError(turn, msg) {
+  turn.error = msg;
+  turn.el.querySelector(".pipeline").remove();
+  turn.el.querySelector(".answer").innerHTML = `<p class="error">${esc(msg)}</p><p class="refusal-why">Check that Postgres (docker compose up -d) and Ollama are running, then try again.</p>`;
+}
+
+/* ---------- rendering an answer ---------- */
+function formatAnswer(text) {
+  return text.trim().split(/\n{2,}/).map(p =>
+    `<p>${esc(p).replace(/\n/g, "<br>").replace(/\[(\d+)\]/g, '<button class="cite" type="button" data-n="$1">$1</button>')}</p>`).join("");
+}
+
+function refusalReason(a) {
+  if (a.gated) return `<b>Nothing relevant enough.</b> Best match ${a.best_score.toFixed(2)} is below the gate ${a.threshold}; the model was not called.`;
+  if (!a.quotes.some(q => q.verified)) return `<b>No evidence found.</b> Sources were retrieved, but none contains a sentence that answers this.`;
+  if (a.claims.length && a.claims.every(c => c.removed)) return `<b>Every sentence failed the fact check</b>, so nothing was left to show.`;
+  return `<b>The documents don't answer this.</b>`;
+}
+
+function finish(turn, a) {
+  turn.answer = a;
+  const el = turn.el, pipe = el.querySelector(".pipeline");
+  pipe.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
+  const step = k => pipe.querySelector(`[data-step="${k}"]`);
+  if (turn.question !== a.search_query) step("rewrite").classList.add("done");
+  step("retrieve").classList.add("done");
+  if (a.gated) { step("gate").classList.add("stop"); ["evidence", "answer", "check"].forEach(k => step(k).classList.add("skip")); }
+  else {
+    step("gate").classList.add("done");
+    const verified = a.quotes.some(q => q.verified);
+    step("evidence").classList.add(verified ? "done" : "stop");
+    if (!verified) ["answer", "check"].forEach(k => step(k).classList.add("skip"));
+    else { step("answer").classList.add("done"); step("check").classList.add(turn.strict ? (a.claims.some(c => c.removed) ? "stop" : "done") : "skip"); }
+  }
+
+  const body = el.querySelector(".answer");
+  if (a.refused) {
+    el.classList.add("refusal");
+    body.innerHTML = `<p>${esc(a.text)}</p><p class="refusal-why">${refusalReason(a)}</p>`;
+  } else {
+    body.innerHTML = formatAnswer(a.text);
+  }
+
+  const meta = [];
+  if (turn.question !== a.search_query) meta.push(`<span>searched for “${esc(a.search_query)}”</span>`);
+  if (!a.refused) {
+    const verified = a.quotes.filter(q => q.verified).length, invented = a.quotes.length - verified;
+    meta.push(`<span class="chip">${a.cited.length} source${a.cited.length === 1 ? "" : "s"} · ${verified} quote${verified === 1 ? "" : "s"}</span>`);
+    if (invented) meta.push(`<span class="chip warn">${invented} invented ID${invented === 1 ? "" : "s"} discarded</span>`);
+    const kept = a.claims.filter(c => !c.removed);
+    if (turn.strict && a.claims.length) {
+      const removed = a.claims.length - kept.length;
+      meta.push(removed ? `<span class="chip bad">${removed} sentence${removed === 1 ? "" : "s"} removed</span>`
+                        : `<span class="chip ok">${a.claims.length}/${a.claims.length} sentences verified</span>`);
+    } else if (!turn.strict && a.claims.some(c => c.issue)) meta.push(`<span class="chip warn">citation warnings</span>`);
+  }
+  meta.push(`<span class="chip">best match ${a.best_score.toFixed(2)}</span>`);
+  el.insertAdjacentHTML("beforeend", `<div class="meta">${meta.join("")}</div>`);
+
+  const removed = a.claims.filter(c => c.removed);
+  if (removed.length && !a.refused) {
+    const items = removed.map(c => `<div><s>${esc(c.text)}</s><small>${esc(c.issue || c.reason || "not supported by the quoted evidence")}</small></div>`).join("");
+    el.insertAdjacentHTML("beforeend", `<details class="removed" ${removed.length <= 2 ? "open" : ""}><summary class="section-label">Removed by the fact check (${removed.length})</summary>${items}</details>`);
+  }
+  const images = a.hits.filter(h => h.image && (a.cited.includes(h.n) || /image|picture|photo|show me/i.test(turn.question)));
+  if (images.length && !a.refused) {
+    el.insertAdjacentHTML("beforeend", `<div class="thumbs">${images.slice(0, 4).map(h =>
+      `<button type="button" data-n="${h.n}"><img src="${esc(h.image)}" alt="${esc(h.title)}" loading="lazy"><span>${esc(h.title)}</span></button>`).join("")}</div>`);
+  }
+
+  history.push({ role: "user", content: turn.question }, { role: "assistant", content: a.text });
+  select(turn);
+  scrollDown();
+}
+
+/* ---------- inspector ---------- */
+$("threadInner").addEventListener("click", e => {
+  const bot = e.target.closest(".msg-bot"); if (!bot) return;
+  const turn = turns.find(t => t.el === bot); if (!turn?.answer) return;
+  const cite = e.target.closest("[data-n]");
+  select(turn, cite ? +cite.dataset.n : null);
+  if (window.matchMedia("(max-width: 1180px)").matches) openInspector();
+});
+
+function select(turn, focusN = null) {
+  selected = turn;
+  turns.forEach(t => t.el.classList.toggle("selected", t === turn));
+  renderInspector(turn);
+  if (focusN) {
+    const card = $("inspBody").querySelector(`[data-source="${focusN}"]`);
+    if (card) { card.closest("details")?.setAttribute("open", ""); card.scrollIntoView({ block: "start", behavior: "smooth" }); card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
+  }
+}
+
+function sourceCard(h, quotes) {
+  const where = [TYPE_LABEL[h.doc_type] || h.doc_type, h.page ? `page ${h.page}` : ""].filter(Boolean).join(" · ");
+  const link = h.url ? `<a href="${esc(h.url)}" target="_blank" rel="noopener">open</a>` : "";
+  return `<div class="source" data-source="${h.n}">
+    ${h.image ? `<img src="${esc(h.image)}" alt="${esc(h.title)}" loading="lazy">` : ""}
+    <div class="src-head">
+      <div class="src-title"><span class="n">[${h.n}]</span><span>${esc(h.title)}</span></div>
+      <div class="src-sub"><span>${esc(where)}</span><span class="bar" title="relevance ${h.score}"><i style="width:${Math.round(h.score * 100)}%"></i></span><span>${h.score.toFixed(2)}</span>${link}</div>
+    </div>
+    ${quotes.map(q => `<p class="quote">${esc(q.text)}</p>`).join("")}
+    <p class="excerpt">${esc(h.content)}</p><button class="more" type="button">Show full passage</button>
+  </div>`;
+}
+
+function renderInspector(turn) {
+  const body = $("inspBody");
+  if (!turn?.answer) { $("inspTitle").textContent = "Evidence"; body.innerHTML = '<p class="insp-empty">Select an answer to see the sources it was built from, the exact quotes, and how each sentence was checked.</p>'; return; }
+  const a = turn.answer;
+  $("inspTitle").textContent = a.refused ? "Why it refused" : "Evidence";
+  const quotesFor = n => a.quotes.filter(q => q.verified && q.source === n);
+  const cited = a.hits.filter(h => a.cited.includes(h.n));
+  const others = a.hits.filter(h => !a.cited.includes(h.n));
+  let html = `<div><p class="section-label">Question searched</p><p style="margin:0">${esc(a.search_query)}</p></div>`;
+  if (a.refused) html += `<p class="refusal-why" style="margin:0">${refusalReason(a)}</p>`;
+  if (a.claims.length) {
+    html += `<div><p class="section-label">Sentence checks</p><div class="claims">${a.claims.map(c => {
+      const ok = !c.removed && !c.issue && c.supported !== false;
+      const verdict = c.removed ? "removed" : c.supported === true ? "supported" : c.issue ? "warning" : "not checked";
+      return `<div class="claim ${ok ? "ok" : "bad"}"><span class="verdict">${verdict}${c.citations.length ? " · cites " + c.citations.map(n => `[${n}]`).join("") : ""}</span><span>${esc(c.text)}</span>${c.issue || c.reason ? `<small>${esc(c.issue || c.reason)}</small>` : ""}</div>`;
+    }).join("")}</div></div>`;
+  }
+  if (cited.length) html += `<div style="display:grid;gap:10px"><p class="section-label" style="margin:0">Cited sources</p>${cited.map(h => sourceCard(h, quotesFor(h.n))).join("")}</div>`;
+  if (others.length) html += `<details class="others" ${cited.length ? "" : "open"}><summary>${others.length} other retrieved passage${others.length === 1 ? "" : "s"} (not cited)</summary>${others.map(h => sourceCard(h, quotesFor(h.n))).join("")}</details>`;
+  body.innerHTML = html;
+}
+$("inspBody").addEventListener("click", e => {
+  const more = e.target.closest(".more"); if (!more) return;
+  const ex = more.previousElementSibling; ex.classList.toggle("open");
+  more.textContent = ex.classList.contains("open") ? "Show less" : "Show full passage";
+});
+
+/* ---------- small-screen panels ---------- */
+function openInspector() { $("inspector").classList.add("open"); $("scrim").hidden = false; }
+function closePanels() { $("inspector").classList.remove("open"); $("library").classList.remove("open"); $("scrim").hidden = true; }
+$("openInsp").addEventListener("click", openInspector);
+$("closeInsp").addEventListener("click", closePanels);
+$("scrim").addEventListener("click", closePanels);
+$("libToggle").addEventListener("click", () => { $("library").classList.add("open"); $("scrim").hidden = false; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanels(); });
+
+function scrollDown() { const t = $("thread"); t.scrollTop = t.scrollHeight; }
+input.focus();
+</script>
+</body>
+</html>
