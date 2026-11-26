@@ -56,5 +56,16 @@ Each version fixed the biggest weakness of the previous one. Diagrams: [architec
 **Fixed:** uncited but correct sentences were deleted (e.g. "Chandrayaan-3 is the third mission in the Chandrayaan programme"); they are now judged against the closest quote and cited. New questions: 12–27 s → 8–16 s, first text after ~5 s. Evaluation 42/44 → **44/44**, claims removed 7 → 2.
 **Problem left:** reading the evidence prompt (~600 tokens/s on this laptop) is the floor. See [performance.md](performance.md).
 
+## V4.3: Partial answers, refusal loophole closed
+**Found by** a five-turn test conversation mixing images and follow-ups.
+**Fixed:**
+- A question answerable only in part was refused entirely. The model now answers the part it can and names what the documents don't say; such sentences are not removed as unsupported.
+- **Safety bug:** any answer *containing* the refusal sentence was treated as a refusal and skipped the fact check, which let a wrong claim through. Refusal now means the whole answer; refusal sentences inside an answer are dropped and the rest is checked.
+- Image answers pasted the evidence list back; quotes from images stopped mid-sentence; thumbnails showed every retrieved image whenever the question said "image".
+- Gate rule: a quarter of the way from the highest trap instead of halfway (0.501 → 0.423), after a held-out comparative question was refused.
+
+**Result:** 47/47 (3 new cases from the conversation).
+**Problem left:** two-part questions often get only one part answered.
+
 ## V5: Shared team deployment (proposed, not built)
 Document watcher → ingest workers → MinIO for raw files + replicated Postgres/pgvector with team and embedding-model tags. Team apps → one RAG API service → shared embedding server, reranker, LLM server. See [team-deployment.md](team-deployment.md).

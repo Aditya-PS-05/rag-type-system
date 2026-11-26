@@ -412,7 +412,9 @@ function finish(turn, a) {
     const items = removed.map(c => `<div><s>${esc(c.text)}</s><small>${esc(c.issue || c.reason || "not supported by the quoted evidence")}</small></div>`).join("");
     el.insertAdjacentHTML("beforeend", `<details class="removed" ${removed.length <= 2 ? "open" : ""}><summary class="section-label">Removed by the fact check (${removed.length})</summary>${items}</details>`);
   }
-  const images = a.hits.filter(h => h.image && (a.cited.includes(h.n) || /image|picture|photo|show me/i.test(turn.question)));
+  const cited = a.hits.filter(h => h.image && a.cited.includes(h.n));
+  const asksToSee = /\b(show me|pictures?|photos?|photographs?|images of)\b/i.test(turn.question);
+  const images = cited.length ? cited : asksToSee ? a.hits.filter(h => h.image) : [];
   if (images.length && !a.refused) {
     el.insertAdjacentHTML("beforeend", `<div class="thumbs">${images.slice(0, 4).map(h =>
       `<button type="button" data-n="${h.n}"><img src="${esc(h.image)}" alt="${esc(h.title)}" loading="lazy"><span>${esc(h.title)}</span></button>`).join("")}</div>`);
@@ -469,7 +471,7 @@ function renderInspector(turn) {
   if (a.claims.length) {
     html += `<div><p class="section-label">Sentence checks</p><div class="claims">${a.claims.map(c => {
       const ok = !c.removed && !c.issue && c.supported !== false;
-      const how = c.method === "exact quote" ? " · exact quote" : c.method === "fact checker" ? " · fact checker" : "";
+      const how = c.method ? ` · ${c.method}` : "";
       const verdict = (c.removed ? "removed" : c.supported === true ? "supported" : c.issue ? "warning" : "not checked") + how + (c.auto_cited && !c.removed ? " · citation added" : "");
       return `<div class="claim ${ok ? "ok" : "bad"}"><span class="verdict">${verdict}${c.citations.length ? " · cites " + c.citations.map(n => `[${n}]`).join("") : ""}</span><span>${esc(c.text)}</span>${c.issue || c.reason ? `<small>${esc(c.issue || c.reason)}</small>` : ""}</div>`;
     }).join("")}</div></div>`;

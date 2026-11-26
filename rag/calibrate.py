@@ -6,9 +6,11 @@ calibration.json with a fingerprint of what the scores depend on (team, embeddin
 corpus), and chat/eval warn when that fingerprint no longer matches.
 
 Choice rule: keep at least --min-recall of answerable questions above the gate, then put the threshold
-halfway between the lowest kept answerable score and the highest trap score below it (widest margin).
+--position of the way from the highest trap score below them (0) to the lowest kept answerable score (1).
+The default 0.25 leans towards letting questions through: a real question refused by the gate is lost,
+while a trap that passes it still has to survive evidence selection and the fact check.
 
-Usage: uv run python -m rag.calibrate [--cases evals/cases.jsonl] [--min-recall 1.0] [--dry-run]
+Usage: uv run python -m rag.calibrate [--cases evals/cases.jsonl] [--min-recall 1.0] [--position 0.25] [--dry-run]
 """
 
 import argparse
@@ -35,13 +37,17 @@ def split_of(case: dict) -> str:
     return "test" if bucket < TEST_PERCENT else "tune"
 
 
-def choose_threshold(answerable: list[float], traps: list[float], min_recall: float = 1.0) -> float:
+POSITION = 0.25
+
+
+def choose_threshold(answerable: list[float], traps: list[float], min_recall: float = 1.0,
+                     position: float = POSITION) -> float:
     if not answerable:
         raise ValueError("need at least one answerable question to calibrate")
     ranked = sorted(answerable)
     floor = ranked[min(int((1 - min_recall) * len(ranked)), len(ranked) - 1)]
     ceiling = max((t for t in traps if t < floor), default=0.0)
-    return round((floor + ceiling) / 2, 3)
+    return round(ceiling + (floor - ceiling) * position, 3)
 
 
 def gate_stats(rows: list[dict], threshold: float) -> dict:
@@ -116,6 +122,8 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--cases", default="evals/cases.jsonl")
+    ap.add_argument("--position", type=float, default=POSITION,
+                    help="0 = just above the highest trap, 1 = at the lowest answerable score")
     ap.add_argument("--min-recall", type=float, default=1.0,
                     help="share of answerable tune questions that must pass the gate")
     ap.add_argument("--dry-run", action="store_true", help="report without saving")
@@ -137,10 +145,10 @@ def main():
     tune = [r for r in rows if r["split"] == "tune"]
     test = [r for r in rows if r["split"] == "test"]
     threshold = choose_threshold([r["score"] for r in tune if not r["trap"]],
-                                 [r["score"] for r in tune if r["trap"]], args.min_recall)
+                                 [r["score"] for r in tune if r["trap"]], args.min_recall, args.position)
     fp = fingerprint(store, cfg, reranked)
     record = {
-        "threshold": threshold, "setting": setting_name(cfg, reranked), "min_recall": args.min_recall,
+        "threshold": threshold, "setting": setting_name(cfg, reranked), "min_recall": args.min_recall, "position": args.position,
         "calibrated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "cases": {"tune": len(tune), "test": len(test)},
         "tune": gate_stats(tune, threshold), "test": gate_stats(test, threshold),

@@ -12,17 +12,18 @@ class FakeStore:
         return self.corpus
 
 
-def test_threshold_is_midway_between_lowest_answerable_and_highest_trap_below_it():
-    assert calibrate.choose_threshold([0.9, 0.7, 0.95], [0.05, 0.4, 0.85]) == 0.55
+def test_threshold_sits_a_quarter_of_the_way_from_highest_trap_to_lowest_answerable():
+    assert calibrate.choose_threshold([0.9, 0.7, 0.95], [0.05, 0.4, 0.85]) == 0.475
+    assert calibrate.choose_threshold([0.9, 0.7, 0.95], [0.05, 0.4, 0.85], position=0.5) == 0.55
 
 
-def test_threshold_without_traps_below_answerable_sits_halfway_to_zero():
-    assert calibrate.choose_threshold([0.6, 0.9], [0.95]) == 0.3
+def test_threshold_without_traps_below_answerable_is_measured_from_zero():
+    assert calibrate.choose_threshold([0.6, 0.9], [0.95]) == 0.15
 
 
 def test_min_recall_lets_the_lowest_answerable_fall_below_the_gate():
     t = calibrate.choose_threshold([0.2, 0.8, 0.9, 0.95], [0.1, 0.6], min_recall=0.75)
-    assert 0.2 < t < 0.8 and t == 0.7
+    assert 0.6 < t < 0.8 and t == 0.65
 
 
 def test_split_is_stable_and_respects_explicit_field():

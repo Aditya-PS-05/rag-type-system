@@ -42,3 +42,6 @@
 {"q": "What is the phone number of the Space Telescope Science Institute?", "trap": true}
 {"q": "What did Yuri Gagarin eat for breakfast on the morning of his flight?", "trap": true}
 {"q": "How many tweets did NASA post about the Ingenuity helicopter?", "trap": true}
+{"q": "How many days before the final plunge was the aurora image taken, and which instrument captured it?", "history": ["Show me Cassini's last pictures of Saturn before the mission ended."], "expect": [["one day", "1 day"], "Ultraviolet Imaging Spectrograph"]}
+{"q": "Was Juno planned to end the same way?", "history": ["Why did NASA destroy Cassini on purpose instead of leaving it in orbit?"], "expect": ["deorbit"]}
+{"q": "In that lightning image Juno took with its star camera, how close was it, and what colour was the lightning flash?", "expect": [["37,000", "41,000"]]}

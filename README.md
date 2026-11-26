@@ -22,7 +22,7 @@ bot> Voyager 1 was launched on September 5, 1977 [2].
 
 you> What is the capital of France?
 bot> I don't know based on the available documents.
-(no source was relevant enough: best match 0.06 < threshold 0.50; the model was not called)
+(no source was relevant enough: best match 0.06 < threshold 0.42; the model was not called)
 ```
 
 ## Quickstart
@@ -85,7 +85,8 @@ Evaluation set: 29 factual questions (incl. 4 follow-ups and a comparison), 2 im
 | V3 evidence-first | 44 | 26/29 | 13/13 | 0/74 invented evidence IDs; ~11 s per answer |
 | V4 hybrid retrieval | 44 | 27/29 | 13/13 (9 by the gate) | 0/99 invented IDs; ~11 s per answer |
 | V4.1 calibrated gate | 44 | 27/29 | 13/13 (10 by the gate) | gate 0.501 chosen on 37 questions; 0/4 answerable refused on 7 held out |
-| V4.2 faster, auto-cite | 44 | **29/29** | **13/13** (10 by the gate) | 0/77 invented IDs; 8–16 s per new question |
+| V4.2 faster, auto-cite | 44 | 29/29 | 13/13 (10 by the gate) | 0/77 invented IDs; 8–16 s per new question |
+| V4.3 partial answers, gate 0.423 | 47 | **32/32** | **13/13** (10 by the gate) | answers the known part and says what is missing; refusal phrase can't bypass checking |
 
 Version history: [docs/versions.md](docs/versions.md) · Full results: [docs/evaluation.md](docs/evaluation.md)
 
@@ -120,7 +121,7 @@ docs/                         design documentation and architecture diagrams
 | `EMBED_MODEL` / `EMBED_DIM` | `nomic-embed-text` / `768` | Embedding model and vector size |
 | `CHAT_MODEL` | `qwen3:4b-instruct` | Model for rewriting, evidence selection, answers, fact checks |
 | `RAG_RERANK` / `RERANK_MODEL` | `1` / `jinaai/jina-reranker-v1-turbo-en` | Reranker on/off and model |
-| `RAG_MIN_RERANK_SCORE` | from `calibration.json` (0.501), else `0.3` | Gate threshold on reranker score; setting it overrides calibration |
+| `RAG_MIN_RERANK_SCORE` | from `calibration.json` (0.423), else `0.3` | Gate threshold on reranker score; setting it overrides calibration |
 | `RAG_MIN_SCORE` | from `calibration.json`, else `0.68` | Gate threshold on cosine similarity (used when `RAG_RERANK=0`) |
 | `RAG_CALIBRATION` | `calibration.json` | Where calibrated thresholds are stored |
 | `OLLAMA_KEEP_ALIVE` | `30m` | How long Ollama keeps the models loaded after a request |
@@ -130,7 +131,8 @@ docs/                         design documentation and architecture diagrams
 
 **Thresholds and tuning**
 - **The gate threshold is only valid for this setup.** It is calibrated (`rag.calibrate`) for one corpus, embedder and reranker, and saved with a fingerprint of them; chat and eval warn when any changes. A new corpus needs labelled questions and a re-run.
-- **The evaluation set is small.** 44 questions, 37 to tune and 7 held out. The held-out score is a sanity check, not a reliable estimate.
+- **The evaluation set is small.** 47 questions, 38 to tune and 9 held out. The held-out score is a sanity check, not a reliable estimate. One new held-out question already moved the gate from 0.501 to 0.423.
+- **Two-part questions** ("was it planned the same way? and show me a picture") often get only one part answered by the 4B model. Nothing false survives, but half the question can go unanswered.
 - **The gate cannot catch on-topic traps.** Questions on-topic but not answered by the documents score 0.15–0.87, overlapping real questions (0.66–0.99). Only evidence selection by the 4B model stops them, which is likely but not guaranteed.
 - **The gate looks at one number:** the best chunk's score, not the gap to the others or agreement between keyword and vector search.
 - **Other parameters were set by hand,** some to fix a single question: top-8 chunks, ±1 sentence context, 1,200-char chunks, 10 evidence sentences, rerank pool 24. Only the first 40 sentences of each source can be cited.

@@ -15,6 +15,9 @@ REFUSAL = "I don't know based on the available documents."
 
 _CITATION = re.compile(r"\[(\d+)\]")
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(*-])|\n+")
+_STATES_GAP = re.compile(
+    r"^\s*(the\s+)?(provided\s+|available\s+|retrieved\s+)?(documents?|sources?|quotes?|evidence)\b[^.]{0,40}?"
+    r"\b(do|does|did)\s+not\s+(say|state|mention|specify|include|describe|give|cover|provide|contain)\b", re.I)
 _ONLY_CITATIONS = re.compile(r"^\s*(\[\d+\]\s*)+[.]?\s*$")
 _SOURCE_SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 MAX_SENTENCES_PER_SOURCE = 40
@@ -48,8 +51,27 @@ class GroundingReport:
         return [c for c in self.claims if c.issue or c.supported is False]
 
 
+_REFUSAL_PHRASE = "don't know based on the available documents"
+
+
 def is_refusal(answer: str) -> bool:
-    return "don't know based on the available documents" in answer.lower()
+    """True only when the whole answer is the refusal, so a refusal phrase can't hide claims from checking."""
+    return _REFUSAL_PHRASE in answer.lower() and not without_refusal_sentences(answer)
+
+
+def without_refusal_sentences(answer: str) -> str:
+    """Drop sentences that contain the refusal phrase; the rest of a mixed answer is checked as usual."""
+    pieces = re.split(r"(?<=[.!?])\s+", answer)
+    return " ".join(p for p in pieces if _REFUSAL_PHRASE not in p.lower()).strip()
+
+
+def _clip_to_sentence(text: str, limit: int) -> str:
+    """Cut at the last sentence end within the limit, so a quote never stops mid-sentence."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+    return cut[:end + 1] if end > limit // 2 else cut
 
 
 def number_sentences(hits: list[SearchHit]) -> dict[str, tuple[int, str]]:
@@ -57,7 +79,7 @@ def number_sentences(hits: list[SearchHit]) -> dict[str, tuple[int, str]]:
     numbered = {}
     for i, h in enumerate(hits, start=1):
         if h.doc_type == "image":
-            numbered[f"{i}.1"] = (i, " ".join(h.content.split())[:MAX_IMAGE_EVIDENCE_CHARS])
+            numbered[f"{i}.1"] = (i, _clip_to_sentence(" ".join(h.content.split()), MAX_IMAGE_EVIDENCE_CHARS))
             continue
         sentences = [" ".join(s.split()) for s in _SOURCE_SENTENCE.split(h.content) if s.strip()]
         for j, sentence in enumerate(sentences[:MAX_SENTENCES_PER_SOURCE], start=1):
@@ -121,7 +143,9 @@ def check_citations(answer: str, valid_sources: set[int]) -> GroundingReport:
         cites = [int(n) for n in _CITATION.findall(text)]
         claim = Claim(text, cites)
         invalid = sorted({n for n in cites if n not in valid_sources})
-        if not cites:
+        if _STATES_GAP.match(text) and not cites:
+            claim.supported, claim.method = True, "states what is missing"
+        elif not cites:
             claim.issue = "no citation"
         elif invalid:
             claim.issue = f"cites source(s) {invalid} with no verified quote"
@@ -185,7 +209,7 @@ def verify_claims(llm, report: GroundingReport, evidence: dict[int, str]) -> Gro
             c.citations, c.issue, c.auto_cited = [source], None, True
     pending = []
     for c in report.claims:
-        if c.issue:
+        if c.issue or c.method:
             continue
         if copies_evidence(c.text, " ".join(evidence.get(n, "") for n in c.citations)):
             c.supported, c.method = True, "exact quote"

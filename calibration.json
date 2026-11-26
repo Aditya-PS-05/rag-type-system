@@ -1,9 +1,9 @@
 {
   "default/jinaai/jina-reranker-v1-turbo-en": {
-    "calibrated_at": "2026-11-26T10:59:09+00:00",
+    "calibrated_at": "2026-11-26T16:15:31+00:00",
     "cases": {
-      "test": 7,
-      "tune": 37
+      "test": 9,
+      "tune": 38
     },
     "fingerprint": {
       "corpus": "155 docs, 3537 chunks, 9000a10a4263",
@@ -12,14 +12,15 @@
       "team": "default"
     },
     "min_recall": 1.0,
+    "position": 0.25,
     "setting": "min_rerank_score",
     "test": {
-      "answerable_refused": "0/4",
+      "answerable_refused": "0/6",
       "traps_gated": "3/3"
     },
-    "threshold": 0.501,
+    "threshold": 0.423,
     "tune": {
-      "answerable_refused": "0/27",
+      "answerable_refused": "0/28",
       "traps_gated": "7/10"
     }
   }

@@ -103,3 +103,27 @@ def test_add_citations_inserts_before_final_punctuation():
     claim = Claim("Juno is powered by solar arrays.", [3], auto_cited=True)
     assert add_citations("Intro [1]. Juno is powered by solar arrays.", [claim]) == "Intro [1]. Juno is powered by solar arrays [3]."
     assert claim.text == "Juno is powered by solar arrays [3]."
+
+
+def test_sentence_naming_missing_information_is_not_a_claim_to_remove():
+    report = check_citations("Juno was less than 37,000 miles away [1]. The documents do not say what colour the flash was.", {1})
+    gap = report.claims[1]
+    assert gap.supported and gap.method == "states what is missing" and not report.problems
+
+
+def test_image_evidence_is_clipped_at_a_sentence_end():
+    text = "First sentence about the image. " * 30
+    hits = [SearchHit(text, 0.9, "image", "Image", "s", "p", None)]
+    quote = number_sentences(hits)["1.1"][1]
+    assert len(quote) <= 600 and quote.endswith("image.")
+
+
+def test_refusal_phrase_inside_an_answer_does_not_skip_checking():
+    from rag.grounding import is_refusal, without_refusal_sentences
+    mixed = ("Cassini was deorbited into Jupiter's atmosphere [1]. "
+             "I don't know based on the available documents whether a picture is shown.")
+    assert not is_refusal(mixed) and is_refusal(REFUSAL)
+    assert without_refusal_sentences(mixed) == "Cassini was deorbited into Jupiter's atmosphere [1]."
+    assert [c.text for c in check_citations(mixed, {1}).claims] == [
+        "Cassini was deorbited into Jupiter's atmosphere [1].",
+        "I don't know based on the available documents whether a picture is shown."]

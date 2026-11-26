@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from rag.config import Settings
 from rag.grounding import (REFUSAL, Claim, GroundingReport, Quote, add_citations, check_citations, is_refusal,
+                           without_refusal_sentences,
                            number_sentences, quotes_from_ids, remove_claims, verify_claims)
 from rag.ollama import Ollama
 from rag.retrieval import retrieve
@@ -37,10 +38,17 @@ Return JSON: {{"ids": ["<id>", ...]}}"""
 ANSWER_PROMPT = f"""You answer questions about space exploration using ONLY the evidence quotes in the user's message.
 Rules:
 - Every sentence that states a fact must end with the citation number(s) of the quotes it uses, like [1] or [2][3].
+- Answer every part of the question. Put each fact in its own short sentence, and do not add conclusions or
+  comparisons that the quotes do not state themselves.
 - Use only what the quotes say. Do not add facts, numbers or dates from your own knowledge, even if you are sure they are true.
 - Report dates and events exactly as the quotes state them; do not merge or reinterpret them.
-- If the quotes do not answer the question, reply with exactly: {REFUSAL}
-- When a quote comes from an image, describe the image from it and say it can be viewed.
+- If the quotes answer none of the question, reply with exactly: {REFUSAL} That sentence is only ever the whole
+  reply; never combine it with other sentences.
+- If the question asks for something the quotes do not contain, answer the rest and add one sentence naming what
+  is missing (e.g. "The documents do not say what colour the flash was."). Do not mention missing details the
+  question did not ask for.
+- When a quote comes from an image, describe in your own words what the image shows, name it by its title and
+  say it can be viewed. Never copy the quote list format such as [2] (image) Title: "...".
 - Answer in at most 4 sentences (up to 8 if the question asks for a list or details). Use only the quotes that
   answer the question; do not restate every quote."""
 
@@ -170,6 +178,8 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
         if on_token:
             on_token(token)
     text = "".join(parts).strip()
+    if not is_refusal(text):
+        text = without_refusal_sentences(text) or REFUSAL
 
     evidence = evidence_by_source(verified, hits)
     grounding = check_citations(text, set(evidence))
