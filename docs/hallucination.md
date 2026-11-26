@@ -12,7 +12,7 @@ This cannot be *proven* with an LLM in the loop. The design makes failures rare,
 | Wrong chunks retrieved; model fills the gap | Kepler question gets Hubble chunks | **Hybrid search + reranker**; then evidence selection finds nothing → refuse rather than guess |
 | Model invents a quote | | **Sentence IDs**: code supplies the text; invented IDs are discarded |
 | Model misreads or merges what it read | "entered in 2013" (source: entered 2012, confirmed 2013) | **Answer from quotes only** + **fact check** → sentence removed |
-| Uncited filler | "It is the most distant object…" | **Citation check** → removed in strict mode |
+| Uncited filler | "It is the most distant object…" | **Citation check** → judged against the closest quote; kept and cited if supported, removed otherwise |
 | Follow-up loses its subject or reuses old answers | "When did *it* launch?" | **Rewriting**; history is never a source |
 
 ## Guarantees vs best effort

@@ -1,7 +1,9 @@
 """Checks that an answer is backed by the retrieved sources.
 
-Evidence is selected by sentence ID, so every quote is exact source text by construction; claims are
-verified by an LLM judge against the quotes of the sources they cite.
+Evidence is selected by sentence ID, so every quote is exact source text by construction. A claim that
+copies its cited quote word for word is supported without further checks; every other claim is judged
+by an LLM against the quotes of the sources it cites. A claim with no citation is matched to the quote
+it most resembles and judged against that, so a correct but uncited sentence is kept and cited.
 """
 
 import re
@@ -33,6 +35,8 @@ class Claim:
     issue: str | None = None
     supported: bool | None = None
     reason: str = ""
+    auto_cited: bool = False
+    method: str = ""
 
 
 @dataclass
@@ -146,9 +150,47 @@ Use only the evidence; ignore what you know from elsewhere.
 Return JSON with one verdict per claim: {"verdicts": [{"claim": <number>, "supported": true|false, "reason": "<only if unsupported: at most 12 words>"}]}"""
 
 
+_STOPWORDS = {"the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "by", "with", "from", "as", "is",
+              "was", "were", "are", "be", "been", "it", "its", "this", "that", "which", "who", "has", "had", "have"}
+
+
+def _normalize(text: str) -> str:
+    return " ".join(re.sub(r"[\"“”'‘’()]", " ", _CITATION.sub("", text).lower()).split()).strip(" .")
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower())) - _STOPWORDS
+
+
+def copies_evidence(claim: str, evidence: str) -> bool:
+    """True when the claim is an exact (case- and spacing-insensitive) excerpt of the evidence."""
+    norm = _normalize(claim)
+    return len(norm) >= 25 and norm in _normalize(evidence)
+
+
+def closest_source(claim: str, evidence: dict[int, str]) -> int | None:
+    words = _words(_CITATION.sub("", claim))
+    scored = sorted(((len(words & _words(text)), n) for n, text in evidence.items()), reverse=True)
+    return scored[0][1] if scored and scored[0][0] else None
+
+
 def verify_claims(llm, report: GroundingReport, evidence: dict[int, str]) -> GroundingReport:
-    """Judge every cited claim in a single LLM call; claims without a verdict count as unsupported."""
-    pending = [c for c in report.claims if not c.issue]
+    """Judge every claim against its cited evidence; claims without a verdict count as unsupported.
+
+    Uncited claims are first assigned the closest source. Exact excerpts are accepted without the LLM;
+    the rest are judged in a single call.
+    """
+    for c in report.claims:
+        if c.issue == "no citation" and (source := closest_source(c.text, evidence)):
+            c.citations, c.issue, c.auto_cited = [source], None, True
+    pending = []
+    for c in report.claims:
+        if c.issue:
+            continue
+        if copies_evidence(c.text, " ".join(evidence.get(n, "") for n in c.citations)):
+            c.supported, c.method = True, "exact quote"
+        else:
+            pending.append(c)
     if not pending:
         return report
     sources = sorted({n for c in pending for n in c.citations})
@@ -162,9 +204,23 @@ def verify_claims(llm, report: GroundingReport, evidence: dict[int, str]) -> Gro
     verdicts = {v.get("claim"): v for v in result.get("verdicts", []) if isinstance(v, dict)}
     for i, claim in enumerate(pending, start=1):
         verdict = verdicts.get(i)
+        claim.method = "fact checker"
         claim.supported = bool(verdict and verdict.get("supported"))
         claim.reason = verdict.get("reason", "") if verdict else "no verdict returned by the checker"
     return report
+
+
+def add_citations(answer: str, claims: list[Claim]) -> str:
+    """Write the citation of each auto-cited claim into the answer text (before its final punctuation)."""
+    for c in claims:
+        if not c.auto_cited or _CITATION.search(c.text):
+            continue
+        marks = "".join(f"[{n}]" for n in c.citations)
+        text = c.text.rstrip()
+        cited = f"{text[:-1]} {marks}{text[-1]}" if text[-1:] in ".!?" else f"{text} {marks}"
+        answer = answer.replace(c.text, cited, 1)
+        c.text = cited
+    return answer
 
 
 def remove_claims(answer: str, claims: list[Claim]) -> str:

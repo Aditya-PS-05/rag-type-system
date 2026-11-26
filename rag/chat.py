@@ -99,7 +99,7 @@ def main():
 
     def handle(question: str):
         result = ask(store, llm, cfg, question, history=history, k=args.k, doc_types=doc_types,
-                     strict=strict, reranker=reranker, on_token=stream)
+                     strict=strict, reranker=reranker, on_token=None if strict else stream)
         if strict or not result.verified_quotes:
             print(result.text)
         else:

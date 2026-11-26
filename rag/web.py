@@ -48,7 +48,8 @@ def answer_to_json(result: Answer, threshold: float, data_dir: Path) -> dict:
                  for i, h in enumerate(result.hits, 1)],
         "quotes": [{"source": q.source, "text": q.text, "verified": q.verified} for q in result.quotes],
         "claims": [{"text": c.text, "citations": c.citations, "supported": c.supported, "issue": c.issue,
-                    "reason": c.reason, "removed": id(c) in removed} for c in result.grounding.claims],
+                    "reason": c.reason, "removed": id(c) in removed, "auto_cited": c.auto_cited,
+                    "method": c.method} for c in result.grounding.claims],
         "cited": result.cited_sources,
     }
 
@@ -69,6 +70,7 @@ class App:
         self.threshold = self.cfg.min_rerank_score if self.reranker else self.cfg.min_score
         self.data_dir = data_dir.resolve()
         self.lock = threading.Lock()
+        self.llm.warm()
 
     def info(self) -> dict:
         with self.lock:

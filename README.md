@@ -64,13 +64,13 @@ Chat commands: `/sources` (list indexed documents), `/strict`, `/evidence`, `/he
 
 ## How an answer is produced
 
-1. **Rewrite** a follow-up ("when did it launch?") into a standalone question using the chat history.
+1. **Rewrite** a follow-up ("when did it launch?") into a standalone question using the chat history. Skipped when the question doesn't refer back to anything.
 2. **Retrieve**: vector search + keyword search → merged → reranked by a cross-encoder → top 8, plus neighbouring text.
 3. **Gate**: if nothing is relevant enough, refuse. The LLM is never called.
-4. **Select evidence**: sources are split into numbered sentences; the LLM returns sentence IDs; code looks up the exact text (plus one sentence either side).
-5. **Answer** from those quotes only, citing them.
-6. **Check**: every sentence must cite a quoted source; one LLM pass judges each claim against its quotes.
-7. **Remove** unsupported sentences. If nothing supported is left, refuse.
+4. **Select evidence**: the top 6 sources are split into numbered sentences; the LLM returns up to 10 sentence IDs; code looks up the exact text (plus one sentence either side).
+5. **Answer** from those quotes only, citing them, in at most 4 sentences (8 for lists or details).
+6. **Check**: a sentence copied word for word from its quote is accepted; one LLM pass judges every other sentence against the quotes it cites. An uncited sentence is judged against the quote it most resembles.
+7. **Remove** unsupported sentences and add the citation to uncited ones that passed. If nothing supported is left, refuse.
 
 Details: [docs/how-it-works.md](docs/how-it-works.md) · Why each step exists: [docs/hallucination.md](docs/hallucination.md)
 
@@ -84,7 +84,8 @@ Evaluation set: 29 factual questions (incl. 4 follow-ups and a comparison), 2 im
 | V2 guardrails | 34 | 24/24 | 8/8 (all by the gate) | |
 | V3 evidence-first | 44 | 26/29 | 13/13 | 0/74 invented evidence IDs; ~11 s per answer |
 | V4 hybrid retrieval | 44 | 27/29 | 13/13 (9 by the gate) | 0/99 invented IDs; ~11 s per answer |
-| V4.1 calibrated gate | 44 | **27/29** | **13/13** (10 by the gate) | gate 0.501 chosen on 37 questions; 0/4 answerable refused on 7 held out |
+| V4.1 calibrated gate | 44 | 27/29 | 13/13 (10 by the gate) | gate 0.501 chosen on 37 questions; 0/4 answerable refused on 7 held out |
+| V4.2 faster, auto-cite | 44 | **29/29** | **13/13** (10 by the gate) | 0/77 invented IDs; 8–16 s per new question |
 
 Version history: [docs/versions.md](docs/versions.md) · Full results: [docs/evaluation.md](docs/evaluation.md)
 
@@ -122,6 +123,7 @@ docs/                         design documentation and architecture diagrams
 | `RAG_MIN_RERANK_SCORE` | from `calibration.json` (0.501), else `0.3` | Gate threshold on reranker score; setting it overrides calibration |
 | `RAG_MIN_SCORE` | from `calibration.json`, else `0.68` | Gate threshold on cosine similarity (used when `RAG_RERANK=0`) |
 | `RAG_CALIBRATION` | `calibration.json` | Where calibrated thresholds are stored |
+| `OLLAMA_KEEP_ALIVE` | `30m` | How long Ollama keeps the models loaded after a request |
 | `RAG_TEAM` | `default` | Team whose documents are indexed and searched |
 
 ## Known limitations
@@ -138,7 +140,7 @@ docs/                         design documentation and architecture diagrams
 - **Comparisons and multi-step questions need every fact cited,** and the 4B model's evidence choice varies between similar questions.
 
 **System**
-- About 10 s per strict answer: 4 sequential LLM calls on a laptop; strict mode cannot stream.
+- **Speed: 8–16 s per new question on an M5 laptop;** the web app shows a draft after ~5 s. The floor is reading the ~2,000-token evidence prompt: this machine processes prompts at ~600 tokens/s and writes at ~40 tokens/s. Repeated questions are faster because Ollama caches prompts. See [docs/performance.md](docs/performance.md).
 - Images are understood only through their text metadata, not pixels; PDF tables and figures become rough text.
 - Keyword search is English-only.
 - Teams are separated by a `team` column with no authentication; the default database password is for local use only. The shared deployment (V5) is not built.
@@ -154,6 +156,7 @@ Planned fixes, in order: a larger labelled set (~150 questions) → a gate that 
 | [how-it-works.md](docs/how-it-works.md) | Ingestion, storage schema, retrieval, answering, in detail |
 | [hallucination.md](docs/hallucination.md) | Where hallucinations come from and which step stops each |
 | [evaluation.md](docs/evaluation.md) | Test set, metrics, calibrating thresholds, results |
+| [performance.md](docs/performance.md) | Where the time goes per step, and what was done about it |
 | [decisions.md](docs/decisions.md) | Key technical choices and the alternatives rejected |
 | [team-deployment.md](docs/team-deployment.md) | Sharing across teams, sizing, scaling |
 | [architecture/](docs/architecture/) | Diagrams per version: Eraser sources, Mermaid (renders on GitHub), interactive viewer |

@@ -1,14 +1,16 @@
 """Question answering pipeline.
 
 rewrite follow-up -> retrieve -> relevance gate -> select evidence sentences by ID (quotes are exact source text)
--> answer from verified quotes only -> check citations -> verify claims (LLM judge) -> remove unsupported
+-> answer from verified quotes only -> check citations -> verify claims (exact quote or LLM judge)
+-> remove unsupported, cite the uncited ones that were verified
 """
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from rag.config import Settings
-from rag.grounding import (REFUSAL, Claim, GroundingReport, Quote, check_citations, is_refusal,
+from rag.grounding import (REFUSAL, Claim, GroundingReport, Quote, add_citations, check_citations, is_refusal,
                            number_sentences, quotes_from_ids, remove_claims, verify_claims)
 from rag.ollama import Ollama
 from rag.retrieval import retrieve
@@ -16,6 +18,8 @@ from rag.store import SearchHit, VectorStore
 
 HISTORY_TURNS = 4
 MAX_EVIDENCE_SENTENCES = 10
+MAX_ANSWER_TOKENS = 400
+EVIDENCE_SOURCES = 6  # the model reads the top 6 of the retrieved chunks: prompt reading is the slowest step
 
 REWRITE_PROMPT = """Rewrite the user's latest question as a standalone question that can be understood without the conversation.
 Replace pronouns and vague references ("it", "they", "that mission", "the second one") with the specific names from the conversation.
@@ -37,10 +41,12 @@ Rules:
 - Report dates and events exactly as the quotes state them; do not merge or reinterpret them.
 - If the quotes do not answer the question, reply with exactly: {REFUSAL}
 - When a quote comes from an image, describe the image from it and say it can be viewed.
-- Be concise."""
+- Answer in at most 4 sentences (up to 8 if the question asks for a list or details). Use only the quotes that
+  answer the question; do not restate every quote."""
 
 REWRITE_SCHEMA = {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}
-EVIDENCE_SCHEMA = {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"}}},
+EVIDENCE_SCHEMA = {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"},
+                                                            "maxItems": MAX_EVIDENCE_SENTENCES}},
                    "required": ["ids"]}
 
 
@@ -72,8 +78,21 @@ class Answer:
         return sorted({n for c in self.grounding.claims if c not in self.removed for n in c.citations})
 
 
+FOLLOW_UP = re.compile(
+    r"\b(it|its|it's|they|them|their|he|him|his|she|her|this|that|these|those|there|then|former|latter|same|"
+    r"other|another|one|ones|else|also|too)\b"
+    r"|\bthe (mission|rover|lander|telescope|spacecraft|probe|craft|satellite|station|crew|program|programme|"
+    r"paper|image|picture|photo|launch|landing)\b"
+    r"|^\s*(and|but|so|what about|how about)\b", re.I)
+
+
+def needs_rewrite(question: str) -> bool:
+    """Only questions that may refer back to the conversation are rewritten (saves an LLM call)."""
+    return bool(FOLLOW_UP.search(question)) or len(question.split()) <= 2
+
+
 def rewrite_question(llm: Ollama, history: list[dict], question: str) -> str:
-    if not history:
+    if not history or not needs_rewrite(question):
         return question
     convo = "\n".join(f"{m['role']}: {m['content']}" for m in history[-2 * HISTORY_TURNS:])
     result = llm.chat_json([
@@ -94,6 +113,7 @@ def format_numbered_sources(hits: list[SearchHit], numbered: dict[str, tuple[int
 
 
 def select_evidence(llm: Ollama, question: str, hits: list[SearchHit]) -> list[Quote]:
+    hits = hits[:EVIDENCE_SOURCES]
     numbered = number_sentences(hits)
     result = llm.chat_json([
         {"role": "system", "content": EVIDENCE_PROMPT},
@@ -120,12 +140,13 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
         on_stage: Callable[[str], None] | None = None) -> Answer:
     """Answer from the documents only.
 
-    strict=True fact-checks every claim and removes unsupported ones before returning (nothing is streamed).
-    strict=False streams the answer and only reports citation problems.
+    strict=True fact-checks every claim and removes unsupported ones; the returned text is final, and
+    tokens passed to on_token are a draft that may still lose sentences.
+    strict=False only reports citation problems.
     on_stage is called with "rewrite", "retrieve", "evidence", "answer" and "check" as each step starts.
     """
     stage = on_stage or (lambda name: None)
-    if history:
+    if history and needs_rewrite(question):
         stage("rewrite")
     search_query = rewrite_question(llm, history or [], question)
     stage("retrieve")
@@ -144,9 +165,9 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
                 {"role": "user", "content": f"Evidence quotes:\n{format_evidence(verified, hits)}\n\nQuestion: {search_query}"}]
     stage("answer")
     parts = []
-    for token in llm.chat_stream(messages):
+    for token in llm.chat_stream(messages, max_tokens=MAX_ANSWER_TOKENS):
         parts.append(token)
-        if on_token and not strict:
+        if on_token:
             on_token(token)
     text = "".join(parts).strip()
 
@@ -161,4 +182,6 @@ def ask(store: VectorStore, llm: Ollama, cfg: Settings, question: str, *, histor
             text = remove_claims(text, removed)
             if len(removed) == len(grounding.claims) or not text:
                 text = REFUSAL
+        if text != REFUSAL:
+            text = add_citations(text, [c for c in grounding.claims if c not in removed])
     return Answer(text, hits, search_query, quotes=quotes, grounding=grounding, removed=removed)

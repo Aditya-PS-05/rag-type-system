@@ -31,23 +31,23 @@ Every search filters on `team` and `embed_model`, so teams never see each other'
 3. **Fusion:** reciprocal rank fusion (`Σ 1/(60 + rank)`). Rewards chunks either method ranks high; no score normalisation needed.
 4. **Rerank:** a cross-encoder reads question and chunk *together* (much more accurate than comparing two separate vectors) and scores the best 24 from 0 to 1. Top 8 kept.
 5. **Images:** if the question asks for pictures ("show me", "photos", "image of"), the top 3 images are always included.
-6. **Neighbours:** text/PDF hits get up to 400 characters of the previous and next chunk (overlap removed).
+6. **Neighbours:** text/PDF hits get up to 250 characters of the previous and next chunk (overlap removed). A neighbour that is itself a hit is skipped, so no text is read twice.
 
 With `RAG_RERANK=0` steps 2–4 are skipped (vector top 8, cosine score).
 
 ## 5. Answering (`rag/qa.py`)
 | Step | LLM call | Output | Guard |
 |---|---|---|---|
-| Rewrite follow-up | JSON | standalone question | only when there is history |
+| Rewrite follow-up | JSON | standalone question | only with history and a referring word ("it", "they", "the rover"…) or a 1–2 word question |
 | Gate | none | refuse / continue | best score < threshold → refuse |
-| Select evidence | JSON | sentence IDs (max 10) | each ID also brings the sentence before and after; IDs that don't exist are discarded; none valid → refuse |
-| Answer | streamed | text with `[n]` citations | sees only verified quotes |
+| Select evidence | JSON | sentence IDs from the top 6 sources (schema allows at most 10) | each ID also brings the sentence before and after; IDs that don't exist are discarded; none valid → refuse |
+| Answer | streamed | text with `[n]` citations | sees only verified quotes; at most 400 tokens |
 | Citation check | none | issues per sentence | uncited / cites unquoted source |
-| Fact check | JSON, one call | verdict per claim | strict mode only |
+| Fact check | JSON, one call | verdict per claim | strict mode only; exact excerpts of the cited quote skip the LLM; uncited sentences are judged against the closest quote and cited if supported |
 | Remove | none | cleaned answer | nothing supported left → refuse |
 
 All calls use temperature 0. JSON calls use Ollama's schema-constrained output, so responses always parse.
-Strict mode (default) waits for the checks before printing. `--fast` streams the answer and only reports citation problems.
+Strict mode (default): the terminal chat waits for the checks; the web app shows the streamed answer as a draft, then replaces it with the checked text. `--fast` streams the answer and only reports citation problems. Every request asks Ollama to keep the models loaded (`OLLAMA_KEEP_ALIVE`, 30 min), and the web app loads them at start.
 
 ## 6. Interfaces
 - `rag.web`: local web app. A standard-library HTTP server wraps `ask()` and streams newline-delimited JSON (`stage` → `token` → `result`); one offline HTML page renders the pipeline steps live, citations as links into an evidence inspector (quotes, per-sentence verdicts, removed sentences), and image thumbnails served from `data/raw`. One question at a time; `--host 0.0.0.0` shares it on a network.

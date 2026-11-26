@@ -9,7 +9,7 @@ IMAGES_PER_VISUAL_QUERY = 3
 CANDIDATES_PER_METHOD = 30
 RERANK_POOL = 24
 RRF_K = 60
-NEIGHBOR_CHARS = 400
+NEIGHBOR_CHARS = 250
 VISUAL_INTENT = re.compile(r"\b(images|image of|pictures?|photos?|photographs?|show me|looks? like)\b", re.I)
 
 
@@ -31,9 +31,12 @@ def _strip_overlap(before: str, after: str) -> str:
 
 
 def with_neighbors(store: VectorStore, hits: list[SearchHit]) -> list[SearchHit]:
-    """Extend text/PDF hits with up to NEIGHBOR_CHARS of the previous and next chunk of the same document."""
+    """Extend text/PDF hits with up to NEIGHBOR_CHARS of the previous and next chunk of the same document.
+
+    A neighbour that is itself one of the hits is skipped: the model already reads it as its own source.
+    """
     keys = [(h.document_id, h.chunk_index) for h in hits if h.doc_type != "image" and h.document_id]
-    neighbors = store.chunk_neighbors(keys)
+    neighbors = {k: v for k, v in store.chunk_neighbors(keys).items() if k not in set(keys)}
     for h in hits:
         if h.doc_type == "image" or not h.document_id:
             continue

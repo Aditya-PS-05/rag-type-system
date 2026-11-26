@@ -44,7 +44,7 @@ class FakeLLM:
             return {"ids": self.quotes}
         return self.verdicts.pop(0)
 
-    def chat_stream(self, messages):
+    def chat_stream(self, messages, **options):
         self.streamed += 1
         yield self.answer
 
@@ -88,8 +88,7 @@ def test_invented_evidence_ids_refuse_without_answering():
 def test_unsupported_claims_are_removed_in_strict_mode():
     llm = FakeLLM(ids=["1.1"],
                   answer="Juno arrived at Jupiter on July 5, 2016 [1]. It carried a nuclear reactor to Jupiter [1].",
-                  verdicts=[{"verdicts": [{"claim": 1, "supported": True, "reason": ""},
-                                         {"claim": 2, "supported": False, "reason": "not in evidence"}]}])
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": False, "reason": "not in evidence"}]}])
     result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive?")
     assert result.text == "Juno arrived at Jupiter on July 5, 2016 [1]."
     assert [c.reason for c in result.removed] == ["not in evidence"]
@@ -132,3 +131,33 @@ def test_stages_are_reported_in_order():
     ask(FakeStore([hit("text", "Milky Way", score=0.5)]), FakeLLM(), Settings(min_score=0.65), "pizza?",
         on_stage=gated.append)
     assert gated == ["retrieve"]
+
+
+def test_exact_quotes_skip_the_checker_and_uncited_supported_sentences_get_cited():
+    llm = FakeLLM(ids=["1.1"],
+                  answer="Juno arrived at Jupiter on July 5, 2016 [1]. The Juno probe is powered by solar arrays.",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": True, "reason": ""}]}])
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "Tell me about Juno")
+    assert result.text == "Juno arrived at Jupiter on July 5, 2016 [1]. The Juno probe is powered by solar arrays [1]."
+    exact, cited = result.grounding.claims
+    assert exact.method == "exact quote" and cited.auto_cited and cited.method == "fact checker"
+    assert result.removed == [] and result.cited_sources == [1]
+
+
+def test_strict_mode_streams_a_draft_and_returns_the_checked_text():
+    llm = FakeLLM(ids=["1.1"], answer="Juno arrived at Jupiter on July 5, 2016 [1]. It carried a nuclear reactor [1].",
+                  verdicts=[{"verdicts": [{"claim": 1, "supported": False, "reason": "not in evidence"}]}])
+    tokens = []
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive?", on_token=tokens.append)
+    assert "reactor" in "".join(tokens) and "reactor" not in result.text
+
+
+def test_standalone_questions_are_not_rewritten():
+    from rag.qa import needs_rewrite
+    assert needs_rewrite("When was it launched?") and needs_rewrite("Where did the rover land?")
+    assert needs_rewrite("What about Kepler?") and needs_rewrite("Its commander?")
+    assert not needs_rewrite("When was the Hubble Space Telescope launched?")
+    llm = FakeLLM(ids=["1.1"], answer="Juno arrived at Jupiter on July 5, 2016 [1].", rewrite="SHOULD NOT BE USED")
+    history = [{"role": "user", "content": "Tell me about Voyager"}, {"role": "assistant", "content": "..."}]
+    result = ask(FakeStore([hit("text", "Juno", JUNO)]), llm, Settings(), "When did Juno arrive at Jupiter?", history=history)
+    assert result.search_query == "When did Juno arrive at Jupiter?"

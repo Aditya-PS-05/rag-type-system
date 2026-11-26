@@ -89,3 +89,17 @@ def test_quotes_from_ids_adds_neighbouring_sentences():
     numbered = {f"1.{i}": (1, f"S{i}.") for i in range(1, 6)}
     quotes = quotes_from_ids(["1.1", "1.5"], numbered)
     assert [q.text for q in quotes] == ["S1. S2.", "S4. S5."]
+
+
+def test_exact_excerpt_detection_ignores_case_spacing_and_citations():
+    from rag.grounding import copies_evidence
+    assert copies_evidence("voyager 1  might have become the first spacecraft [2].", VOYAGER)
+    assert not copies_evidence("Voyager 1 entered interstellar space on August 25, 2013 [2].", VOYAGER)
+    assert not copies_evidence("Voyager 1 [2].", VOYAGER)
+
+
+def test_add_citations_inserts_before_final_punctuation():
+    from rag.grounding import add_citations
+    claim = Claim("Juno is powered by solar arrays.", [3], auto_cited=True)
+    assert add_citations("Intro [1]. Juno is powered by solar arrays.", [claim]) == "Intro [1]. Juno is powered by solar arrays [3]."
+    assert claim.text == "Juno is powered by solar arrays [3]."

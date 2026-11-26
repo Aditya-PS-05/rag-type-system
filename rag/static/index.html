@@ -81,6 +81,8 @@ a { color: var(--accent); }
 .msg-bot.refusal { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .answer p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .answer p:last-child { margin: 0; }
+.answer.draft { color: var(--muted); }
+.draft-note { font-size: 12px; color: var(--muted); font-style: italic; }
 .cite { all: unset; cursor: pointer; font: 600 11px/1 var(--mono); padding: 2px 5px; margin: 0 1px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
 .cite:hover, .cite:focus-visible { background: var(--accent); color: var(--panel); }
 .refusal-why { font-size: 13px; color: var(--muted); }
@@ -335,7 +337,9 @@ function handleEvent(turn, ev) {
   if (ev.type === "stage") setStep(turn, ev.name);
   else if (ev.type === "token") {
     turn.streamed += ev.text;
-    turn.el.querySelector(".answer").innerHTML = formatAnswer(turn.streamed);
+    const body = turn.el.querySelector(".answer");
+    body.classList.toggle("draft", turn.strict);
+    body.innerHTML = formatAnswer(turn.streamed) + (turn.strict ? '<p class="draft-note">Draft: checking each sentence against the quotes…</p>' : "");
     scrollDown();
   } else if (ev.type === "result") finish(turn, ev.answer);
   else if (ev.type === "error") showError(turn, ev.message);
@@ -377,6 +381,7 @@ function finish(turn, a) {
   }
 
   const body = el.querySelector(".answer");
+  body.classList.remove("draft");
   if (a.refused) {
     el.classList.add("refusal");
     body.innerHTML = `<p>${esc(a.text)}</p><p class="refusal-why">${refusalReason(a)}</p>`;
@@ -391,6 +396,8 @@ function finish(turn, a) {
     meta.push(`<span class="chip">${a.cited.length} source${a.cited.length === 1 ? "" : "s"} · ${verified} quote${verified === 1 ? "" : "s"}</span>`);
     if (invented) meta.push(`<span class="chip warn">${invented} invented ID${invented === 1 ? "" : "s"} discarded</span>`);
     const kept = a.claims.filter(c => !c.removed);
+    const added = kept.filter(c => c.auto_cited).length;
+    if (added) meta.push(`<span class="chip">${added} citation${added === 1 ? "" : "s"} added</span>`);
     if (turn.strict && a.claims.length) {
       const removed = a.claims.length - kept.length;
       meta.push(removed ? `<span class="chip bad">${removed} sentence${removed === 1 ? "" : "s"} removed</span>`
@@ -462,7 +469,8 @@ function renderInspector(turn) {
   if (a.claims.length) {
     html += `<div><p class="section-label">Sentence checks</p><div class="claims">${a.claims.map(c => {
       const ok = !c.removed && !c.issue && c.supported !== false;
-      const verdict = c.removed ? "removed" : c.supported === true ? "supported" : c.issue ? "warning" : "not checked";
+      const how = c.method === "exact quote" ? " · exact quote" : c.method === "fact checker" ? " · fact checker" : "";
+      const verdict = (c.removed ? "removed" : c.supported === true ? "supported" : c.issue ? "warning" : "not checked") + how + (c.auto_cited && !c.removed ? " · citation added" : "");
       return `<div class="claim ${ok ? "ok" : "bad"}"><span class="verdict">${verdict}${c.citations.length ? " · cites " + c.citations.map(n => `[${n}]`).join("") : ""}</span><span>${esc(c.text)}</span>${c.issue || c.reason ? `<small>${esc(c.issue || c.reason)}</small>` : ""}</div>`;
     }).join("")}</div></div>`;
   }

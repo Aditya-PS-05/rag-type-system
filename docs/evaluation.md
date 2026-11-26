@@ -56,7 +56,10 @@ On-topic traps above the gate (Gagarin's breakfast 0.69, NASA tweets 0.79, Europ
 | V4, gate off | 44 | 25/29 | 2/2 | 13/13 (model refused) | 0/87 invented IDs; used for calibration |
 | V4 | 44 | 27/29 | 2/2 | 13/13 (9 by gate) | 0/99 invented IDs, 7 claims removed, 536 s |
 | V4.1 (gate 0.501) | 44 | 27/29 | 2/2 | 13/13 (10 by gate) | 0/99 invented IDs, 7 claims removed, 602 s; held-out split 7/7 |
+| V4.2 | 44 | 29/29 | 2/2 | 13/13 (10 by gate) | 0/77 invented IDs, 2 claims removed, 443 s |
 
-Remaining V4/V4.1 failures (42/44, same two):
-- *"Hubble or Kepler first?"*: correct answer removed. It cited only the Hubble quote, so the checker saw no Kepler evidence. Comparisons need every compared fact cited.
-- *Perseverance follow-up*: answered with coordinates instead of the crater name (the non-follow-up version passed). The 4B model's evidence choice varies.
+V4.2 passes all 44. The two V4/V4.1 failures were fixed by:
+- *"Hubble or Kepler first?"*: the correct comparison sentence had cited only one side. It is now judged against all the quotes and kept.
+- *Perseverance follow-up*: the shorter evidence prompt and the 4-sentence answer limit led to the crater name instead of coordinates. This is a 4B model's choice and could regress.
+
+44/44 on a 44-question set that was also used for tuning is not proof of reliability; see the Known limitations in the README.

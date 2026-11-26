@@ -51,5 +51,10 @@ Each version fixed the biggest weakness of the previous one. Diagrams: [architec
 **Fixed:** the hand-picked 0.3 → calibrated 0.501. No answerable question refused on either split; 10 of 13 traps now stopped before the LLM (was 9). The threshold no longer silently goes wrong when the documents or models change.
 **Problem left:** the test split is only 7 questions, and on-topic traps still overlap real questions. Next: a larger labelled set, then a gate that combines several signals.
 
+## V4.2: Faster, fewer false removals
+**Added:** evidence reads the top 6 sources with repeated neighbour text removed (prompt ~3,550 → ~2,000 tokens); the evidence schema caps IDs at 10 (one question had produced 74 IDs, 15 s); answers capped at 4 sentences / 400 tokens; the rewrite call only runs for questions that refer back; exact excerpts skip the fact check; models stay loaded; the web app streams a draft in strict mode.
+**Fixed:** uncited but correct sentences were deleted (e.g. "Chandrayaan-3 is the third mission in the Chandrayaan programme"); they are now judged against the closest quote and cited. New questions: 12–27 s → 8–16 s, first text after ~5 s. Evaluation 42/44 → **44/44**, claims removed 7 → 2.
+**Problem left:** reading the evidence prompt (~600 tokens/s on this laptop) is the floor. See [performance.md](performance.md).
+
 ## V5: Shared team deployment (proposed, not built)
 Document watcher → ingest workers → MinIO for raw files + replicated Postgres/pgvector with team and embedding-model tags. Team apps → one RAG API service → shared embedding server, reranker, LLM server. See [team-deployment.md](team-deployment.md).

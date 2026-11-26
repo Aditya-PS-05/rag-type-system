@@ -1,10 +1,12 @@
 import json
+import os
 from collections.abc import Iterator
 
 import httpx
 
 DOC_PREFIX = "search_document: "
 QUERY_PREFIX = "search_query: "
+KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 
 
 class Ollama:
@@ -15,7 +17,7 @@ class Ollama:
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         r = self.client.post("/api/embed", json={
-            "model": self.embed_model, "input": texts, "truncate": True,
+            "model": self.embed_model, "input": texts, "truncate": True, "keep_alive": KEEP_ALIVE,
         })
         r.raise_for_status()
         return r.json()["embeddings"]
@@ -29,10 +31,16 @@ class Ollama:
     def embed_query(self, text: str) -> list[float]:
         return self._embed([QUERY_PREFIX + text])[0]
 
-    def chat_stream(self, messages: list[dict], num_ctx: int = 8192) -> Iterator[str]:
+    def warm(self):
+        """Load both models now so the first question doesn't pay for it."""
+        self.embed_query("warm up")
+        self.client.post("/api/generate", json={"model": self.chat_model, "keep_alive": KEEP_ALIVE}).raise_for_status()
+
+    def chat_stream(self, messages: list[dict], num_ctx: int = 8192, max_tokens: int | None = None) -> Iterator[str]:
+        options = {"num_ctx": num_ctx, "temperature": 0} | ({"num_predict": max_tokens} if max_tokens else {})
         with self.client.stream("POST", "/api/chat", json={
-            "model": self.chat_model, "messages": messages, "stream": True,
-            "options": {"num_ctx": num_ctx, "temperature": 0},
+            "model": self.chat_model, "messages": messages, "stream": True, "keep_alive": KEEP_ALIVE,
+            "options": options,
         }) as r:
             r.raise_for_status()
             for line in r.iter_lines():
@@ -42,7 +50,7 @@ class Ollama:
 
     def chat_json(self, messages: list[dict], schema: dict, num_ctx: int = 8192) -> dict:
         r = self.client.post("/api/chat", json={
-            "model": self.chat_model, "messages": messages, "stream": False, "format": schema,
+            "model": self.chat_model, "messages": messages, "stream": False, "format": schema, "keep_alive": KEEP_ALIVE,
             "options": {"num_ctx": num_ctx, "temperature": 0},
         })
         r.raise_for_status()
