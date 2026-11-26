@@ -65,4 +65,4 @@ V4.2 passes all 44 and V4.3 all 47. The two V4/V4.1 failures were fixed by:
 - *"Hubble or Kepler first?"*: the correct comparison sentence had cited only one side. It is now judged against all the quotes and kept.
 - *Perseverance follow-up*: the shorter evidence prompt and the 4-sentence answer limit led to the crater name instead of coordinates. This is a 4B model's choice and could regress.
 
-A perfect score on a 47-question set that was also used for tuning is not proof of reliability. Two-part questions ("was it planned the same way? and show me a picture") often get only one part answered: nothing false survives, but half the question can go unanswered. See see the Known limitations in the README.
+A perfect score on a 47-question set that was also used for tuning is not proof of reliability. Two-part questions ("was it planned the same way? and show me a picture") often get only one part answered: nothing false survives, but half the question can go unanswered. See the Known limitations in the README.
