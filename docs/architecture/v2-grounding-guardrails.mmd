@@ -1,0 +1,48 @@
+---
+title: V2 - Grounding guardrails
+---
+flowchart LR
+  n0[("Postgres pgvector")]
+  subgraph g1["Query path"]
+    n2["User"]
+    n3["Query embedder"]
+    n4["Top-6 cosine search"]
+    n5{"Relevance gate"}
+    n6["Refuse without LLM"]
+    n7["Strict prompt temp 0"]
+    n8["LLM qwen3-4b-instruct"]
+  end
+  subgraph g9["Checks"]
+    n10["Citation check"]
+    n11["Optional LLM fact check"]
+    n12["Warnings shown to user"]
+  end
+  subgraph g13["Evaluation"]
+    n14["Eval set facts images traps"]
+  end
+  n2 -->|"question"| n3
+  n3 --> n4
+  n4 <--> n0
+  n4 --> n5
+  n5 -->|"best score below 0.68"| n6
+  n5 -->|"relevant"| n7
+  n7 --> n8
+  n8 -->|"answer"| n10
+  n10 -->|"verify flag"| n11
+  n11 --> n12
+  n10 -->|"answer + sources"| n2
+  n14 -->|"calibrates threshold"| n5
+  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px
+  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px
+  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px
+  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px
+  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px
+  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px
+  class n0 blue
+  class n2,n3,n4,n7,n8 purple
+  class n5,n10,n11,n12 orange
+  class n6 red
+  class n14 gray
+  style g1 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4
+  style g9 fill:#bf67160f,stroke:#bf6716,stroke-dasharray:5 4
+  style g13 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4

@@ -1,0 +1,49 @@
+---
+title: V1 - Basic local RAG
+---
+flowchart LR
+  subgraph g0["Data sources"]
+    n1["Wikipedia articles"]
+    n2["arXiv PDFs"]
+    n3["NASA images and captions"]
+  end
+  subgraph g4["Ingestion"]
+    n5["Loaders"]
+    n6["Chunker 1200 chars"]
+    n7["Embedder nomic-embed-text"]
+  end
+  n8[("Postgres pgvector")]
+  subgraph g9["Query path"]
+    n10["User"]
+    n11["Chat CLI"]
+    n12["Query embedder"]
+    n13["Top-6 cosine search"]
+    n14["Image boost"]
+    n15["LLM qwen3-4b-instruct"]
+  end
+  n1 --> n5
+  n2 --> n5
+  n3 --> n5
+  n5 --> n6
+  n6 --> n7
+  n7 -->|"vectors + text + metadata"| n8
+  n10 -->|"question"| n11
+  n11 --> n12
+  n12 --> n13
+  n13 <--> n8
+  n13 -->|"picture questions"| n14
+  n14 -->|"sources + prompt"| n15
+  n15 -->|"answer + citations"| n10
+  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px
+  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px
+  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px
+  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px
+  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px
+  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px
+  class n1,n2,n3 gray
+  class n5,n6,n7 green
+  class n8 blue
+  class n10,n11,n12,n13,n14,n15 purple
+  style g0 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4
+  style g4 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4
+  style g9 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4

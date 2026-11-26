@@ -88,6 +88,7 @@ Version history: [docs/versions.md](docs/versions.md) · Full results: [docs/eva
 
 ```
 scripts/download_dataset.py   dataset downloader (Wikipedia, arXiv, NASA)
+scripts/eraser_to_mermaid.py  diagram converter (.eraser → .mmd, README, viewer)
 rag/config.py                 settings from environment variables
 rag/loaders.py                text / PDF / image loaders and cleaning
 rag/chunking.py               paragraph-packing chunker with overlap
@@ -127,13 +128,14 @@ docs/                         design documentation and architecture diagrams
 
 | Doc | Contents |
 |---|---|
+| [reading-guide.md](docs/reading-guide.md) | Where to start reading the code, in what order |
 | [versions.md](docs/versions.md) | V1 → V5: what changed, why, what it fixed, what it cost |
 | [how-it-works.md](docs/how-it-works.md) | Ingestion, storage schema, retrieval, answering, in detail |
 | [hallucination.md](docs/hallucination.md) | Where hallucinations come from and which step stops each |
 | [evaluation.md](docs/evaluation.md) | Test set, metrics, calibrating thresholds, results |
 | [decisions.md](docs/decisions.md) | Key technical choices and the alternatives rejected |
 | [team-deployment.md](docs/team-deployment.md) | Sharing across teams, sizing, scaling |
-| [architecture/](docs/architecture/) | Eraser.io diagram-as-code for each version |
+| [architecture/](docs/architecture/) | Diagrams per version: Eraser sources, Mermaid (renders on GitHub), interactive viewer |
 
 ## Data licenses
 

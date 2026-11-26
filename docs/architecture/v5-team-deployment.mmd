@@ -1,0 +1,47 @@
+---
+title: V5 - Shared team deployment (proposed)
+---
+flowchart LR
+  subgraph g0["Teams"]
+    n1["Team A apps"]
+    n2["Team B chatbot"]
+  end
+  subgraph g3["Ingestion workers"]
+    n4["Document watcher"]
+    n5["Ingest pipeline"]
+  end
+  subgraph g6["Shared services"]
+    n7["RAG API service"]
+    n8["Embedding server"]
+    n9["LLM server"]
+    n10["Reranker"]
+  end
+  subgraph g11["Storage"]
+    n12[("Object storage MinIO")]
+    n13[("Postgres pgvector replicas")]
+  end
+  n4 -->|"new or changed files"| n5
+  n5 -->|"raw PDFs and images"| n12
+  n5 --> n8
+  n5 -->|"chunks + vectors + team ACL"| n13
+  n1 -->|"question + team"| n7
+  n2 --> n7
+  n7 --> n8
+  n7 <-->|"filtered by team and embed model"| n13
+  n7 --> n10
+  n7 --> n9
+  n7 -->|"grounded answer"| n1
+  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px
+  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px
+  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px
+  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px
+  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px
+  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px
+  class n1,n2 gray
+  class n4,n5 green
+  class n7,n8,n9,n10 blue
+  class n12,n13 purple
+  style g0 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4
+  style g3 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4
+  style g6 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4
+  style g11 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4

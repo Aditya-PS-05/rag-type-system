@@ -1,0 +1,472 @@
+<title>RAG Architecture Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: version rail on top, Mermaid canvas left, inspector + code right; stacks on phones. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --sunk: #eceef3; --fg: #171c28; --muted: #5a6273; --line: #d8dce5;
+  --accent: #b5287a; --accent-soft: #f7e3ef; --new: #e2a400; --err: #c23434;
+  --code-k: #7148c0; --code-a: #2b8352; --code-op: #b5287a; --code-l: #8a5a12;
+  --display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --new: #f2c230; --err: #ef7b7b;
+  --code-k: #a98bec; --code-a: #5cc48a; --code-op: #ec6bb5; --code-l: #e5b567;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --new: #f2c230; --err: #ef7b7b;
+  --code-k: #a98bec; --code-a: #5cc48a; --code-op: #ec6bb5; --code-l: #e5b567;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 20px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 1.6rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 75ch; }
+.sub code { font-family: var(--mono); font-size: 0.92em; }
+
+.rail { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ver { all: unset; cursor: pointer; display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+.ver:hover { border-color: var(--muted); }
+.ver:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ver[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ver .tag { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+.ver .tag b { color: var(--accent); font-weight: 500; }
+.ver .name { font-family: var(--display); font-weight: 600; font-size: 0.98rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) { .ver .name, .ver .tag b { display: none; } .ver { padding: 8px; } .ver .tag { justify-content: center; } }
+
+.summary { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.summary p { margin: 0; flex: 1 1 380px; min-width: 0; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.chip.score { background: var(--accent-soft); color: var(--accent); }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.canvas-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
+#stage { height: min(70vh, 660px); min-height: 420px; width: 100%; cursor: grab; touch-action: none; }
+#stage:active { cursor: grabbing; }
+#stage svg { width: 100% !important; height: 100% !important; max-width: none !important; display: block; }
+.toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; z-index: 2; }
+.toolbar > * { pointer-events: auto; }
+.btn { font: 500 12px/1 var(--body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: var(--muted); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--new); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg .btn { border: 0; border-radius: 0; }
+.seg .btn + .btn { border-left: 1px solid var(--line); }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-family: var(--mono); font-size: 12.5px; pointer-events: none; }
+.status.err { color: var(--err); padding: 24px; text-align: center; white-space: pre-wrap; }
+.legend { position: absolute; bottom: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; z-index: 2; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { display: inline-block; width: 14px; height: 10px; border: 1.5px solid var(--muted); }
+.legend .dia { width: 10px; height: 10px; transform: rotate(45deg); }
+.legend .cyl { border-radius: 4px / 3px; }
+.legend .nw { border-color: var(--new); border-width: 2.5px; border-radius: 3px; }
+
+/* interaction states on the Mermaid SVG */
+#stage .node, #stage .edgePaths path, #stage .flowchart-link, #stage .edgeLabel, #stage .cluster { transition: opacity 0.15s; }
+#stage .node { cursor: pointer; }
+#stage .dim { opacity: 0.13; }
+#stage .node.focus { filter: drop-shadow(0 0 1.5px var(--accent)) drop-shadow(0 0 5px var(--accent)); }
+#stage .node.hl { filter: drop-shadow(0 0 2px var(--muted)); }
+#stage path.hl { stroke: var(--accent) !important; stroke-width: 2.6px !important; }
+#stage .edgeLabel.hl { font-weight: 600; }
+#stage .node.is-new { filter: drop-shadow(0 0 1px var(--new)) drop-shadow(0 0 4px var(--new)); }
+#stage .node.is-new.focus { filter: drop-shadow(0 0 1.5px var(--accent)) drop-shadow(0 0 5px var(--accent)); }
+
+aside { display: grid; gap: 16px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.panel-head h2 { font: 600 12px/1.2 var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; display: flex; gap: 8px; align-items: center; }
+.edited { font: 500 11px var(--mono); text-transform: none; letter-spacing: 0; color: var(--accent); }
+.acts { display: flex; gap: 6px; }
+
+.editor { position: relative; height: 380px; background: var(--sunk); font: 12px/1.6 var(--mono); }
+.editor pre, .editor textarea { position: absolute; inset: 0; margin: 0; padding: 12px; font: inherit; white-space: pre; overflow: auto; tab-size: 2; border: 0; }
+.editor pre { pointer-events: none; color: var(--fg); }
+.editor textarea { resize: none; background: transparent; color: transparent; caret-color: var(--fg); outline: none; }
+.editor textarea[readonly] { caret-color: transparent; }
+.editor textarea::selection { background: var(--accent-soft); color: transparent; }
+.editor textarea:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.k { color: var(--code-k); font-weight: 500; }
+.a { color: var(--code-a); }
+.op { color: var(--code-op); font-weight: 500; }
+.lb { color: var(--code-l); }
+.mu { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; padding: 9px 12px; border-top: 1px solid var(--line); }
+
+.inspect { padding: 12px; display: grid; gap: 10px; }
+.inspect .empty { color: var(--muted); margin: 0; }
+.inspect h3 { font-family: var(--display); font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.flow h4 { margin: 0 0 4px; font: 600 11px var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.flow ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.flow li button { all: unset; cursor: pointer; display: block; width: 100%; padding: 5px 8px; border-radius: 5px; background: var(--sunk); box-sizing: border-box; }
+.flow li button:hover, .flow li button:focus-visible { outline: 1px solid var(--accent); }
+.flow li small { display: block; color: var(--muted); font-size: 12px; }
+.newbadge { font: 500 11px var(--mono); color: var(--fg); background: color-mix(in srgb, var(--new) 35%, transparent); border-radius: 4px; padding: 1px 6px; }
+.toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 7px 14px; border-radius: 6px; font-size: 13px; z-index: 20; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>RAG Architecture Explorer</h1>
+    <p class="sub">Every version of the local RAG chatbot as a Mermaid flowchart laid out with ELK, generated from the Eraser sources in <code>docs/architecture/</code>. Drag to pan, scroll to zoom, click a box to trace what flows in and out. Edit the Mermaid code to redraw.</p>
+  </header>
+
+  <nav class="rail" role="tablist" aria-label="Versions" id="rail"></nav>
+  <div class="summary" id="summary"></div>
+
+  <div class="main">
+    <div class="canvas-card">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Layout engine">
+          <button class="btn" type="button" data-layout="elk" aria-pressed="true">ELK</button>
+          <button class="btn" type="button" data-layout="dagre" aria-pressed="false">Dagre</button>
+        </div>
+        <div class="seg" role="group" aria-label="Direction">
+          <button class="btn" type="button" data-dir="LR" aria-pressed="false">→</button>
+          <button class="btn" type="button" data-dir="TB" aria-pressed="true">↓</button>
+        </div>
+        <button class="btn" id="fit" type="button">Fit</button>
+        <button class="btn" id="zin" type="button" aria-label="Zoom in">+</button>
+        <button class="btn" id="zout" type="button" aria-label="Zoom out">−</button>
+        <button class="btn" id="newToggle" type="button" aria-pressed="true"><span class="dot"></span><span id="newLabel">New since V1</span></button>
+      </div>
+      <div id="stage" role="img" aria-label="Architecture flowchart"></div>
+      <div class="status" id="status">Loading Mermaid…</div>
+      <div class="legend">
+        <span><i></i>step</span><span><i class="dia"></i>decision</span><span><i class="cyl"></i>storage</span><span><i class="nw"></i>new in this version</span>
+      </div>
+    </div>
+
+    <aside>
+      <section class="panel" aria-labelledby="inspHead">
+        <div class="panel-head"><h2 id="inspHead">Inspector</h2></div>
+        <div class="inspect" id="inspect"><p class="empty">Click any box in the diagram.</p></div>
+      </section>
+
+      <section class="panel" aria-labelledby="codeHead">
+        <div class="panel-head">
+          <div class="seg" role="tablist" aria-label="Code format" id="codeTabs">
+            <button class="btn" type="button" role="tab" data-tab="mermaid" aria-pressed="true">Mermaid</button>
+            <button class="btn" type="button" role="tab" data-tab="eraser" aria-pressed="false">Eraser source</button>
+          </div>
+          <div class="acts">
+            <span class="edited" id="edited" hidden>edited</span>
+            <button class="btn" id="reset" type="button" disabled>Reset</button>
+            <button class="btn" id="copy" type="button">Copy</button>
+          </div>
+        </div>
+        <h2 id="codeHead" hidden>Diagram code</h2>
+        <div class="editor">
+          <pre id="hl" aria-hidden="true"></pre>
+          <textarea id="code" spellcheck="false" wrap="off" aria-label="Diagram code"></textarea>
+        </div>
+        <p class="hint" id="codeHint"></p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.7/dist/mermaid-layout-elk.esm.min.mjs";
+mermaid.registerLayoutLoaders(elkLayouts);
+
+// Generated by scripts/eraser_to_mermaid.py; do not edit by hand.
+const SOURCES = /*SOURCES*/{"v1-basic-rag.eraser": "title V1 - Basic local RAG\ndirection right\ncolorMode bold\nstyleMode shadow\n\nData sources [color: gray] {\n  Wikipedia articles [icon: file-text]\n  arXiv PDFs [icon: file]\n  NASA images and captions [icon: image]\n}\n\nIngestion [color: green] {\n  Loaders [icon: upload]\n  Chunker 1200 chars [icon: scissors]\n  Embedder nomic-embed-text [icon: cpu]\n}\n\nPostgres pgvector [shape: cylinder, icon: database, color: blue]\n\nQuery path [color: purple] {\n  User [icon: user]\n  Chat CLI [icon: terminal]\n  Query embedder [icon: cpu]\n  Top-6 cosine search [icon: search]\n  Image boost [icon: image]\n  LLM qwen3-4b-instruct [icon: message-circle]\n}\n\nWikipedia articles > Loaders\narXiv PDFs > Loaders\nNASA images and captions > Loaders\nLoaders > Chunker 1200 chars\nChunker 1200 chars > Embedder nomic-embed-text\nEmbedder nomic-embed-text > Postgres pgvector: vectors + text + metadata\n\nUser > Chat CLI: question\nChat CLI > Query embedder\nQuery embedder > Top-6 cosine search\nTop-6 cosine search <> Postgres pgvector\nTop-6 cosine search > Image boost: picture questions\nImage boost > LLM qwen3-4b-instruct: sources + prompt\nLLM qwen3-4b-instruct > User: answer + citations\n", "v1-basic-rag.mmd": "---\ntitle: V1 - Basic local RAG\n---\nflowchart LR\n  subgraph g0[\"Data sources\"]\n    n1[\"Wikipedia articles\"]\n    n2[\"arXiv PDFs\"]\n    n3[\"NASA images and captions\"]\n  end\n  subgraph g4[\"Ingestion\"]\n    n5[\"Loaders\"]\n    n6[\"Chunker 1200 chars\"]\n    n7[\"Embedder nomic-embed-text\"]\n  end\n  n8[(\"Postgres pgvector\")]\n  subgraph g9[\"Query path\"]\n    n10[\"User\"]\n    n11[\"Chat CLI\"]\n    n12[\"Query embedder\"]\n    n13[\"Top-6 cosine search\"]\n    n14[\"Image boost\"]\n    n15[\"LLM qwen3-4b-instruct\"]\n  end\n  n1 --> n5\n  n2 --> n5\n  n3 --> n5\n  n5 --> n6\n  n6 --> n7\n  n7 -->|\"vectors + text + metadata\"| n8\n  n10 -->|\"question\"| n11\n  n11 --> n12\n  n12 --> n13\n  n13 <--> n8\n  n13 -->|\"picture questions\"| n14\n  n14 -->|\"sources + prompt\"| n15\n  n15 -->|\"answer + citations\"| n10\n  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px\n  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px\n  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px\n  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px\n  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px\n  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px\n  class n1,n2,n3 gray\n  class n5,n6,n7 green\n  class n8 blue\n  class n10,n11,n12,n13,n14,n15 purple\n  style g0 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4\n  style g4 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4\n  style g9 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4\n", "v2-grounding-guardrails.eraser": "title V2 - Grounding guardrails\ndirection right\ncolorMode bold\nstyleMode shadow\n\nPostgres pgvector [shape: cylinder, icon: database, color: blue]\n\nQuery path [color: purple] {\n  User [icon: user]\n  Query embedder [icon: cpu]\n  Top-6 cosine search [icon: search]\n  Relevance gate [shape: diamond, icon: filter, color: orange]\n  Refuse without LLM [icon: x-octagon, color: red]\n  Strict prompt temp 0 [icon: file-text]\n  LLM qwen3-4b-instruct [icon: message-circle]\n}\n\nChecks [color: orange] {\n  Citation check [icon: check-square]\n  Optional LLM fact check [icon: shield]\n  Warnings shown to user [icon: alert-triangle]\n}\n\nEvaluation [color: gray] {\n  Eval set facts images traps [icon: clipboard]\n}\n\nUser > Query embedder: question\nQuery embedder > Top-6 cosine search\nTop-6 cosine search <> Postgres pgvector\nTop-6 cosine search > Relevance gate\nRelevance gate > Refuse without LLM: best score below 0.68\nRelevance gate > Strict prompt temp 0: relevant\nStrict prompt temp 0 > LLM qwen3-4b-instruct\nLLM qwen3-4b-instruct > Citation check: answer\nCitation check > Optional LLM fact check: verify flag\nOptional LLM fact check > Warnings shown to user\nCitation check > User: answer + sources\nEval set facts images traps > Relevance gate: calibrates threshold\n", "v2-grounding-guardrails.mmd": "---\ntitle: V2 - Grounding guardrails\n---\nflowchart LR\n  n0[(\"Postgres pgvector\")]\n  subgraph g1[\"Query path\"]\n    n2[\"User\"]\n    n3[\"Query embedder\"]\n    n4[\"Top-6 cosine search\"]\n    n5{\"Relevance gate\"}\n    n6[\"Refuse without LLM\"]\n    n7[\"Strict prompt temp 0\"]\n    n8[\"LLM qwen3-4b-instruct\"]\n  end\n  subgraph g9[\"Checks\"]\n    n10[\"Citation check\"]\n    n11[\"Optional LLM fact check\"]\n    n12[\"Warnings shown to user\"]\n  end\n  subgraph g13[\"Evaluation\"]\n    n14[\"Eval set facts images traps\"]\n  end\n  n2 -->|\"question\"| n3\n  n3 --> n4\n  n4 <--> n0\n  n4 --> n5\n  n5 -->|\"best score below 0.68\"| n6\n  n5 -->|\"relevant\"| n7\n  n7 --> n8\n  n8 -->|\"answer\"| n10\n  n10 -->|\"verify flag\"| n11\n  n11 --> n12\n  n10 -->|\"answer + sources\"| n2\n  n14 -->|\"calibrates threshold\"| n5\n  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px\n  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px\n  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px\n  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px\n  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px\n  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px\n  class n0 blue\n  class n2,n3,n4,n7,n8 purple\n  class n5,n10,n11,n12 orange\n  class n6 red\n  class n14 gray\n  style g1 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4\n  style g9 fill:#bf67160f,stroke:#bf6716,stroke-dasharray:5 4\n  style g13 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4\n", "v3-evidence-first.eraser": "title V3 - Evidence-first answering\ndirection right\ncolorMode bold\nstyleMode shadow\n\nPostgres pgvector [shape: cylinder, icon: database, color: blue]\n\nUnderstand [color: purple] {\n  User [icon: user]\n  Chat history [icon: clock]\n  Follow-up rewriter [icon: edit]\n}\n\nRetrieve [color: blue] {\n  Top-6 cosine search [icon: search]\n  Relevance gate [shape: diamond, icon: filter, color: orange]\n}\n\nEvidence [color: green] {\n  Sentence numbering [icon: list]\n  LLM selects sentence IDs [icon: message-circle]\n  Code looks up exact sentences [icon: code]\n}\n\nAnswer [color: purple] {\n  LLM answers from quotes only [icon: message-circle]\n}\n\nVerify [color: orange] {\n  Citation check [icon: check-square]\n  Batch LLM fact check [icon: shield]\n  Remove unsupported sentences [icon: scissors]\n}\n\nRefusal [icon: x-octagon, color: red]\n\nUser > Follow-up rewriter: question\nChat history > Follow-up rewriter\nFollow-up rewriter > Top-6 cosine search: standalone question\nTop-6 cosine search <> Postgres pgvector\nTop-6 cosine search > Relevance gate\nRelevance gate > Refusal: nothing relevant\nRelevance gate > Sentence numbering\nSentence numbering > LLM selects sentence IDs\nLLM selects sentence IDs > Code looks up exact sentences: IDs like 2.5\nCode looks up exact sentences > Refusal: no valid evidence\nCode looks up exact sentences > LLM answers from quotes only: verified quotes\nLLM answers from quotes only > Citation check\nCitation check > Batch LLM fact check\nBatch LLM fact check > Remove unsupported sentences\nRemove unsupported sentences > Refusal: nothing supported left\nRemove unsupported sentences > User: answer + evidence + sources\n", "v3-evidence-first.mmd": "---\ntitle: V3 - Evidence-first answering\n---\nflowchart LR\n  n0[(\"Postgres pgvector\")]\n  subgraph g1[\"Understand\"]\n    n2[\"User\"]\n    n3[\"Chat history\"]\n    n4[\"Follow-up rewriter\"]\n  end\n  subgraph g5[\"Retrieve\"]\n    n6[\"Top-6 cosine search\"]\n    n7{\"Relevance gate\"}\n  end\n  subgraph g8[\"Evidence\"]\n    n9[\"Sentence numbering\"]\n    n10[\"LLM selects sentence IDs\"]\n    n11[\"Code looks up exact sentences\"]\n  end\n  subgraph g12[\"Answer\"]\n    n13[\"LLM answers from quotes only\"]\n  end\n  subgraph g14[\"Verify\"]\n    n15[\"Citation check\"]\n    n16[\"Batch LLM fact check\"]\n    n17[\"Remove unsupported sentences\"]\n  end\n  n18[\"Refusal\"]\n  n2 -->|\"question\"| n4\n  n3 --> n4\n  n4 -->|\"standalone question\"| n6\n  n6 <--> n0\n  n6 --> n7\n  n7 -->|\"nothing relevant\"| n18\n  n7 --> n9\n  n9 --> n10\n  n10 -->|\"IDs like 2.5\"| n11\n  n11 -->|\"no valid evidence\"| n18\n  n11 -->|\"verified quotes\"| n13\n  n13 --> n15\n  n15 --> n16\n  n16 --> n17\n  n17 -->|\"nothing supported left\"| n18\n  n17 -->|\"answer + evidence + sources\"| n2\n  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px\n  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px\n  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px\n  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px\n  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px\n  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px\n  class n0,n6 blue\n  class n2,n3,n4,n13 purple\n  class n7,n15,n16,n17 orange\n  class n9,n10,n11 green\n  class n18 red\n  style g1 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4\n  style g5 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4\n  style g8 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4\n  style g12 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4\n  style g14 fill:#bf67160f,stroke:#bf6716,stroke-dasharray:5 4\n", "v4-hybrid-retrieval.eraser": "title V4 - Hybrid retrieval with reranking\ndirection right\ncolorMode bold\nstyleMode shadow\n\nPostgres [color: blue] {\n  HNSW vector index [shape: cylinder, icon: database]\n  Full-text GIN index [shape: cylinder, icon: database]\n  Chunk table [shape: cylinder, icon: database]\n}\n\nRetrieve [color: blue] {\n  Standalone question [icon: help-circle]\n  Vector search top 30 [icon: search]\n  Keyword search top 30 [icon: type]\n  RRF fusion [icon: git-merge]\n  Reranker jina-turbo [icon: bar-chart-2]\n  Reranker gate [shape: diamond, icon: filter, color: orange]\n  Add neighbouring chunks [icon: layers]\n}\n\nDownstream [color: green] {\n  Evidence selection and verified answer [icon: shield]\n}\n\nRefusal [icon: x-octagon, color: red]\n\nStandalone question > Vector search top 30\nStandalone question > Keyword search top 30\nVector search top 30 <> HNSW vector index\nKeyword search top 30 <> Full-text GIN index\nVector search top 30 > RRF fusion\nKeyword search top 30 > RRF fusion\nRRF fusion > Reranker jina-turbo: 24 candidates\nReranker jina-turbo > Reranker gate: top 8\nReranker gate > Refusal: best score below 0.3\nReranker gate > Add neighbouring chunks\nAdd neighbouring chunks <> Chunk table\nAdd neighbouring chunks > Evidence selection and verified answer: same as V3\n", "v4-hybrid-retrieval.mmd": "---\ntitle: V4 - Hybrid retrieval with reranking\n---\nflowchart LR\n  subgraph g0[\"Postgres\"]\n    n1[(\"HNSW vector index\")]\n    n2[(\"Full-text GIN index\")]\n    n3[(\"Chunk table\")]\n  end\n  subgraph g4[\"Retrieve\"]\n    n5[\"Standalone question\"]\n    n6[\"Vector search top 30\"]\n    n7[\"Keyword search top 30\"]\n    n8[\"RRF fusion\"]\n    n9[\"Reranker jina-turbo\"]\n    n10{\"Reranker gate\"}\n    n11[\"Add neighbouring chunks\"]\n  end\n  subgraph g12[\"Downstream\"]\n    n13[\"Evidence selection and verified answer\"]\n  end\n  n14[\"Refusal\"]\n  n5 --> n6\n  n5 --> n7\n  n6 <--> n1\n  n7 <--> n2\n  n6 --> n8\n  n7 --> n8\n  n8 -->|\"24 candidates\"| n9\n  n9 -->|\"top 8\"| n10\n  n10 -->|\"best score below 0.3\"| n14\n  n10 --> n11\n  n11 <--> n3\n  n11 -->|\"same as V3\"| n13\n  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px\n  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px\n  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px\n  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px\n  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px\n  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px\n  class n1,n2,n3,n5,n6,n7,n8,n9,n11 blue\n  class n10 orange\n  class n13 green\n  class n14 red\n  style g0 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4\n  style g4 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4\n  style g12 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4\n", "v5-team-deployment.eraser": "title V5 - Shared team deployment (proposed)\ndirection right\ncolorMode bold\nstyleMode shadow\n\nTeams [color: gray] {\n  Team A apps [icon: users]\n  Team B chatbot [icon: users]\n}\n\nIngestion workers [color: green] {\n  Document watcher [icon: eye]\n  Ingest pipeline [icon: upload]\n}\n\nShared services [color: blue] {\n  RAG API service [icon: server]\n  Embedding server [icon: cpu]\n  LLM server [icon: message-circle]\n  Reranker [icon: bar-chart-2]\n}\n\nStorage [color: purple] {\n  Object storage MinIO [shape: cylinder, icon: archive]\n  Postgres pgvector replicas [shape: cylinder, icon: database]\n}\n\nDocument watcher > Ingest pipeline: new or changed files\nIngest pipeline > Object storage MinIO: raw PDFs and images\nIngest pipeline > Embedding server\nIngest pipeline > Postgres pgvector replicas: chunks + vectors + team ACL\nTeam A apps > RAG API service: question + team\nTeam B chatbot > RAG API service\nRAG API service > Embedding server\nRAG API service <> Postgres pgvector replicas: filtered by team and embed model\nRAG API service > Reranker\nRAG API service > LLM server\nRAG API service > Team A apps: grounded answer\n", "v5-team-deployment.mmd": "---\ntitle: V5 - Shared team deployment (proposed)\n---\nflowchart LR\n  subgraph g0[\"Teams\"]\n    n1[\"Team A apps\"]\n    n2[\"Team B chatbot\"]\n  end\n  subgraph g3[\"Ingestion workers\"]\n    n4[\"Document watcher\"]\n    n5[\"Ingest pipeline\"]\n  end\n  subgraph g6[\"Shared services\"]\n    n7[\"RAG API service\"]\n    n8[\"Embedding server\"]\n    n9[\"LLM server\"]\n    n10[\"Reranker\"]\n  end\n  subgraph g11[\"Storage\"]\n    n12[(\"Object storage MinIO\")]\n    n13[(\"Postgres pgvector replicas\")]\n  end\n  n4 -->|\"new or changed files\"| n5\n  n5 -->|\"raw PDFs and images\"| n12\n  n5 --> n8\n  n5 -->|\"chunks + vectors + team ACL\"| n13\n  n1 -->|\"question + team\"| n7\n  n2 --> n7\n  n7 --> n8\n  n7 <-->|\"filtered by team and embed model\"| n13\n  n7 --> n10\n  n7 --> n9\n  n7 -->|\"grounded answer\"| n1\n  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px\n  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px\n  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px\n  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px\n  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px\n  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px\n  class n1,n2 gray\n  class n4,n5 green\n  class n7,n8,n9,n10 blue\n  class n12,n13 purple\n  style g0 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4\n  style g3 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4\n  style g6 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4\n  style g11 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4\n"}/*END*/;
+
+const VERSIONS = [
+  { id: "v1", stem: "v1-basic-rag", name: "Basic RAG", score: "not evaluated",
+    text: "Embed chunks, store them in pgvector, take the top 6 by cosine similarity and let the model answer. The prompt is the only control: it misread a Voyager date in testing." },
+  { id: "v2", stem: "v2-grounding-guardrails", name: "Guardrails", score: "34/34",
+    text: "A relevance gate refuses off-topic questions before the model is called. Every answer gets a citation check; the optional fact check only warns." },
+  { id: "v3", stem: "v3-evidence-first", name: "Evidence-first", score: "41/44",
+    text: "Follow-ups are rewritten. The model picks sentence IDs, code looks up the exact text, the answer is written from those quotes only, and unsupported sentences are removed." },
+  { id: "v4", stem: "v4-hybrid-retrieval", name: "Hybrid retrieval", score: "42/44",
+    text: "Vector and keyword search are fused with reciprocal rank fusion, reranked by a local cross-encoder, and gated on its score (0.3). Neighbouring text is added. Answering is unchanged from V3." },
+  { id: "v5", stem: "v5-team-deployment", name: "Team deployment", score: "proposed",
+    text: "Not built. Shared embedding, reranker and LLM servers behind one RAG API, ingestion workers, object storage and replicated Postgres filtered by team." },
+];
+VERSIONS.forEach(v => { v.original = SOURCES[v.stem + ".mmd"] || ""; v.code = v.original; v.eraser = SOURCES[v.stem + ".eraser"] || ""; });
+
+const $ = id => document.getElementById(id);
+const stage = $("stage"), statusEl = $("status"), insp = $("inspect"), ta = $("code"), hl = $("hl");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const clean = s => String(s ?? "").replace(/#quot;/g, '"').replace(/<br\s*\/?>/g, " ");
+
+let current = 3, engine = "elk", direction = "TB", showNew = true, tab = "mermaid", model = null, pz = null, renderSeq = 0;
+
+/* ---------- theme ---------- */
+function themeVars() {
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  return {
+    fontFamily: "IBM Plex Sans, system-ui, sans-serif", fontSize: "13px",
+    background: v("--surface"), primaryColor: v("--sunk"), primaryTextColor: v("--fg"), primaryBorderColor: v("--muted"),
+    lineColor: v("--muted"), textColor: v("--fg"), titleColor: v("--fg"), edgeLabelBackground: v("--surface"),
+    clusterBkg: "transparent", clusterBorder: v("--line"), nodeTextColor: v("--fg"),
+  };
+}
+function configure() {
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: themeVars(),
+    flowchart: { htmlLabels: true, curve: "basis", padding: 12, nodeSpacing: 34, rankSpacing: 56 },
+    elk: { mergeEdges: false, nodePlacementStrategy: "BRANDES_KOEPF" } });
+}
+function withLayout(code) {
+  code = code.replace(/^(\s*flowchart\s+)(LR|RL|TB|TD|BT)\b/m, `$1${direction}`);
+  const line = `  layout: ${engine}`;
+  const m = code.match(/^---\n([\s\S]*?)\n---\n/);
+  if (!m) return `---\nconfig:\n${line}\n---\n` + code;
+  const fm = /(^|\n)config:/.test(m[1]) ? m[1].replace(/(^|\n)config:/, `$1config:\n${line}`) : `${m[1]}\nconfig:\n${line}`;
+  return `---\n${fm}\n---\n` + code.slice(m[0].length);
+}
+
+/* ---------- model from Mermaid's own parser ---------- */
+async function buildModel(code) {
+  const diagram = await mermaid.mermaidAPI.getDiagramFromText(code);
+  const db = diagram.db;
+  const vmap = db.getVertices(), verts = vmap instanceof Map ? [...vmap.values()] : Object.values(vmap);
+  const nodes = new Map(verts.map(v => [v.id, { id: v.id, label: clean(v.text || v.id), shape: v.type || "", parent: null }]));
+  const groups = (db.getSubGraphs?.() || []).map(g => ({ id: g.id, label: clean(g.title || g.id), nodes: g.nodes || [] }));
+  groups.forEach(g => g.nodes.forEach(n => { if (nodes.has(n)) nodes.get(n).parent = g; }));
+  const edges = (db.getEdges?.() || []).map(e => ({ a: e.start, b: e.end, label: clean(e.text), both: /^double_arrow|<-->/.test(e.type || "") || (e.type || "").includes("double") }));
+  const groupIds = new Set(groups.map(g => g.id));
+  return { nodes, groups, groupIds, edges };
+}
+
+/* ---------- render ---------- */
+async function render() {
+  const seq = ++renderSeq, v = VERSIONS[current];
+  statusEl.className = "status"; statusEl.textContent = "Rendering…"; statusEl.hidden = false;
+  try {
+    configure();
+    const m = await buildModel(v.code);
+    const { svg, bindFunctions } = await mermaid.render("arch-" + seq, withLayout(v.code));
+    if (seq !== renderSeq) return;
+    model = m;
+    if (pz) { pz.destroy(); pz = null; }
+    stage.innerHTML = svg;
+    bindFunctions?.(stage);
+    const el = stage.querySelector("svg");
+    el.removeAttribute("style"); el.setAttribute("width", "100%"); el.setAttribute("height", "100%");
+    indexSvg(el);
+    pz = svgPanZoom(el, { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, minZoom: 0.2, maxZoom: 8, zoomScaleSensitivity: 0.25, dblClickZoomEnabled: false });
+    statusEl.hidden = true;
+    markNew(); showEmpty();
+  } catch (err) {
+    if (seq !== renderSeq) return;
+    statusEl.hidden = false; statusEl.className = "status err";
+    statusEl.textContent = "Mermaid couldn't draw this:\n" + String(err?.message || err).split("\n").slice(0, 4).join("\n");
+  }
+}
+
+/* map Mermaid's DOM back to model ids */
+let nodeEls = new Map(), edgeEls = [];
+function nodeIdOf(g) {
+  const d = g.getAttribute("data-id");
+  if (d && model.nodes.has(d)) return d;
+  const m = (g.id || "").match(/flowchart-(.+)-\d+$/);
+  return m && model.nodes.has(m[1]) ? m[1] : null;
+}
+function indexSvg(svg) {
+  nodeEls = new Map(); edgeEls = [];
+  svg.querySelectorAll("g.node").forEach(g => { const id = nodeIdOf(g); if (id) nodeEls.set(id, g); });
+  const labels = [...svg.querySelectorAll("g.edgeLabel")];
+  svg.querySelectorAll("path.flowchart-link, path[data-edge='true']").forEach(p => {
+    const m = (p.getAttribute("data-id") || p.id || "").match(/L[-_](.+?)[-_](.+?)[-_](\d+)(?:[-_]\d+)?$/);
+    if (!m || edgeEls.some(e => e.path === p)) return;
+    edgeEls.push({ a: m[1], b: m[2], path: p, label: labels.length === model.edges.length ? labels[+m[3]] : null });
+  });
+}
+
+/* ---------- new-since-previous ---------- */
+const prevLabels = new Map();
+async function labelsOf(i) {
+  if (!prevLabels.has(i)) {
+    try { const m = await buildModel(VERSIONS[i].code); prevLabels.set(i, new Set([...m.nodes.values()].filter(n => !m.groupIds.has(n.id)).map(n => n.label))); }
+    catch { prevLabels.set(i, new Set()); }
+  }
+  return prevLabels.get(i);
+}
+async function markNew() {
+  nodeEls.forEach(g => g.classList.remove("is-new"));
+  if (!showNew || current === 0 || !model) return;
+  const prev = await labelsOf(current - 1);
+  model.nodes.forEach(n => { if (!prev.has(n.label)) nodeEls.get(n.id)?.classList.add("is-new"); });
+  showEmpty();
+}
+
+/* ---------- inspector + highlighting ---------- */
+function showEmpty() {
+  if (!model) return;
+  const nNew = stage.querySelectorAll(".node.is-new").length;
+  const steps = [...model.nodes.values()].filter(n => !model.groupIds.has(n.id)).length;
+  insp.innerHTML = `<p class="empty">Click any box. ${steps} components in ${model.groups.length} groups, ${model.edges.length} connections${current && showNew ? `, <span class="newbadge">${nNew} new since ${VERSIONS[current - 1].id.toUpperCase()}</span>` : ""}.</p>`;
+}
+function clearFocus() { stage.querySelectorAll(".dim, .hl, .focus").forEach(e => e.classList.remove("dim", "hl", "focus")); }
+function flowList(title, list) {
+  if (!list.length) return "";
+  return `<div class="flow"><h4>${title}</h4><ul>${list.map(x => `<li><button type="button" data-node="${esc(x.id)}">${esc(x.name)}${x.label ? `<small>${esc(x.label)}</small>` : ""}</button></li>`).join("")}</ul></div>`;
+}
+const nameOf = id => model.nodes.get(id)?.label || model.groups.find(g => g.id === id)?.label || id;
+const kindOf = n => n.shape === "diamond" ? "decision" : n.shape === "cylinder" ? "storage" : "step";
+
+function focusNode(id) {
+  const n = model.nodes.get(id); if (!n) return;
+  clearFocus();
+  const keep = new Set([id]);
+  const ins = [], outs = [];
+  model.edges.forEach(e => {
+    if (e.a !== id && e.b !== id) return;
+    const other = e.a === id ? e.b : e.a; keep.add(other);
+    const rec = { id: other, name: nameOf(other), label: e.label };
+    if (e.both) { ins.push(rec); outs.push(rec); } else if (e.b === id) ins.push(rec); else outs.push(rec);
+  });
+  nodeEls.forEach((g, nid) => { if (!keep.has(nid)) g.classList.add("dim"); else if (nid !== id) g.classList.add("hl"); });
+  nodeEls.get(id)?.classList.add("focus");
+  edgeEls.forEach(e => {
+    const on = e.a === id || e.b === id;
+    e.path.classList.add(on ? "hl" : "dim");
+    e.label?.classList.add(on ? "hl" : "dim");
+  });
+  const isNew = nodeEls.get(id)?.classList.contains("is-new");
+  const chips = [kindOf(n)]; if (n.parent) chips.push("in " + n.parent.label);
+  insp.innerHTML = `<h3>${esc(n.label)}${isNew ? ' <span class="newbadge">new</span>' : ""}</h3>
+    <div class="meta">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+    ${flowList("Receives from", ins)}${flowList("Sends to", outs)}${!ins.length && !outs.length ? '<p class="empty">No direct connections.</p>' : ""}`;
+}
+insp.addEventListener("click", ev => { const b = ev.target.closest("[data-node]"); if (!b) return; const id = b.dataset.node;
+  if (model.nodes.has(id) && !model.groupIds.has(id)) focusNode(id); else focusGroup(id); });
+function focusGroup(id) {
+  const g = model.groups.find(x => x.id === id); if (!g) return;
+  clearFocus();
+  const members = new Set(g.nodes);
+  nodeEls.forEach((el, nid) => { if (!members.has(nid)) el.classList.add("dim"); });
+  edgeEls.forEach(e => { const on = members.has(e.a) || members.has(e.b); e.path.classList.add(on ? "hl" : "dim"); e.label?.classList.add(on ? "hl" : "dim"); });
+  insp.innerHTML = `<h3>${esc(g.label)}</h3><div class="meta"><span class="chip">group</span></div>${flowList("Contains", g.nodes.map(n => ({ id: n, name: nameOf(n) })))}`;
+}
+
+let down = null;
+stage.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+stage.addEventListener("click", e => {
+  if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+  const node = e.target.closest("g.node");
+  if (node) { const id = nodeIdOf(node); if (id) return focusNode(id); }
+  const cl = e.target.closest("g.cluster");
+  if (cl) { const id = cl.getAttribute("data-id") || cl.id.replace(/^.*?-?(g\d+)$/, "$1"); if (model.groups.some(g => g.id === id)) return focusGroup(id); }
+  clearFocus(); showEmpty();
+});
+
+/* ---------- code panel ---------- */
+function highlightMermaid(src) {
+  return src.split("\n").map(line => {
+    let s = esc(line);
+    if (/^\s*(---|title:|config:|layout:)/.test(line)) return `<span class="mu">${s}</span>`;
+    if (/^\s*(flowchart|graph|subgraph|end|classDef|class|style)\b/.test(line)) s = s.replace(/^(\s*)(\w+)/, '$1<span class="k">$2</span>');
+    s = s.replace(/(&lt;--&gt;|--&gt;|-\.-&gt;|-\.-|---)/g, '<span class="op">$1</span>');
+    s = s.replace(/\|(&quot;.*?&quot;)\|/g, '|<span class="lb">$1</span>|');
+    s = s.replace(/(\[\(?|\{)(&quot;.*?&quot;)(\)?\]|\})/g, '$1<span class="a">$2</span>$3');
+    return s;
+  }).join("\n") + "\n";
+}
+function highlightEraser(src) {
+  return src.split("\n").map(line => {
+    let s = esc(line);
+    if (/^\s*(title|direction|colorMode|styleMode)\b/.test(line)) return s.replace(/^(\s*)(\w+)/, '$1<span class="k">$2</span>');
+    if (/\s(&gt;|&lt;&gt;|&lt;)\s/.test(s) && !line.includes("[")) {
+      s = s.replace(/:(\s.*)$/, ':<span class="lb">$1</span>').replace(/(\s)(&lt;&gt;|&gt;|&lt;)(?=\s)/g, '$1<span class="op">$2</span>');
+    }
+    return s.replace(/\[([^\]]*)\]/g, '<span class="a">[$1]</span>').replace(/([{}])\s*$/, '<span class="mu">$1</span>');
+  }).join("\n") + "\n";
+}
+function syncEditor() {
+  hl.innerHTML = tab === "mermaid" ? highlightMermaid(ta.value) : highlightEraser(ta.value);
+  hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
+  const edited = VERSIONS[current].code !== VERSIONS[current].original;
+  $("edited").hidden = !edited; $("reset").disabled = !edited;
+}
+function loadEditor() {
+  const v = VERSIONS[current];
+  ta.value = tab === "mermaid" ? v.code : v.eraser;
+  ta.readOnly = tab !== "mermaid";
+  $("codeHint").innerHTML = tab === "mermaid"
+    ? "Editable: the diagram redraws as you type. Also renders natively on GitHub and in Mermaid Live."
+    : `Read-only source. Paste into <a href="https://app.eraser.io" target="_blank" rel="noopener">eraser.io</a> → Flow chart → code panel.`;
+  ta.scrollTop = 0; syncEditor();
+}
+let timer;
+ta.addEventListener("input", () => {
+  if (tab !== "mermaid") return;
+  VERSIONS[current].code = ta.value; prevLabels.delete(current); syncEditor();
+  clearTimeout(timer); timer = setTimeout(render, 400);
+});
+ta.addEventListener("scroll", () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; });
+ta.addEventListener("keydown", e => { if (e.key === "Tab" && !ta.readOnly) { e.preventDefault(); ta.setRangeText("  ", ta.selectionStart, ta.selectionEnd, "end"); ta.dispatchEvent(new Event("input")); } });
+$("codeTabs").addEventListener("click", e => {
+  const b = e.target.closest("[data-tab]"); if (!b) return;
+  tab = b.dataset.tab;
+  $("codeTabs").querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  loadEditor();
+});
+$("reset").addEventListener("click", () => { const v = VERSIONS[current]; v.code = v.original; prevLabels.delete(current); loadEditor(); render(); toast("Restored the original diagram"); });
+$("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(ta.value); toast(tab === "mermaid" ? "Copied Mermaid code" : "Copied Eraser code"); }
+  catch { ta.focus(); ta.select(); toast("Selected. Press Ctrl/Cmd+C to copy"); }
+});
+function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 1800); }
+
+/* ---------- versions + toolbar ---------- */
+const rail = $("rail");
+rail.innerHTML = VERSIONS.map((v, i) => `<button class="ver" role="tab" aria-selected="false" data-i="${i}"><span class="tag"><span>${v.id.toUpperCase()}</span><b>${esc(v.score)}</b></span><span class="name">${esc(v.name)}</span></button>`).join("");
+rail.addEventListener("click", e => { const b = e.target.closest(".ver"); if (b) location.hash = VERSIONS[+b.dataset.i].id; });
+rail.addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const n = (current + (e.key === "ArrowRight" ? 1 : VERSIONS.length - 1)) % VERSIONS.length;
+  location.hash = VERSIONS[n].id; rail.children[n].focus();
+});
+function selectVersion(i) {
+  current = i; const v = VERSIONS[i];
+  rail.querySelectorAll(".ver").forEach((b, j) => { b.setAttribute("aria-selected", String(j === i)); b.tabIndex = j === i ? 0 : -1; });
+  const title = (v.original.match(/^title:\s*(.+)$/m) || [, v.name])[1];
+  $("summary").innerHTML = `<span class="chip">${esc(v.stem)}.mmd</span><p><strong>${esc(title)}.</strong> ${esc(v.text)}</p><span class="chip score">eval ${esc(v.score)}</span>`;
+  $("newToggle").disabled = i === 0;
+  $("newLabel").textContent = i === 0 ? "First version" : `New since ${VERSIONS[i - 1].id.toUpperCase()}`;
+  loadEditor(); render();
+}
+function fromHash() { const i = VERSIONS.findIndex(v => "#" + v.id === location.hash); selectVersion(i >= 0 ? i : 3); }
+window.addEventListener("hashchange", fromHash);
+
+document.querySelectorAll("[data-layout]").forEach(b => b.addEventListener("click", () => {
+  engine = b.dataset.layout;
+  document.querySelectorAll("[data-layout]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+document.querySelectorAll("[data-dir]").forEach(b => b.addEventListener("click", () => {
+  direction = b.dataset.dir;
+  document.querySelectorAll("[data-dir]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+$("fit").addEventListener("click", () => { pz?.resize(); pz?.fit(); pz?.center(); });
+$("zin").addEventListener("click", () => pz?.zoomIn());
+$("zout").addEventListener("click", () => pz?.zoomOut());
+$("newToggle").addEventListener("click", e => { showNew = !showNew; e.currentTarget.setAttribute("aria-pressed", String(showNew)); clearFocus(); markNew(); showEmpty(); });
+new ResizeObserver(() => { if (pz) { pz.resize(); pz.fit(); pz.center(); } }).observe(stage);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(fromHash);
+</script>
