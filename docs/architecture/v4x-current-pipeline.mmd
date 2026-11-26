@@ -1,0 +1,94 @@
+---
+title: V4.3 - Current pipeline (calibrated gate, partial answers, web app)
+---
+flowchart TB
+  subgraph g0["Interfaces"]
+    n1["Web app rag.web"]
+    n2["Terminal chat rag.chat"]
+    n3["Evaluation rag.eval"]
+  end
+  subgraph g4["Understand"]
+    n5{"Follow-up check"}
+    n6["Rewrite question"]
+  end
+  subgraph g7["Retrieve"]
+    n8["Vector search top 30"]
+    n9["Keyword search top 30"]
+    n10["RRF fusion"]
+    n11["Reranker top 8"]
+    n12["Neighbour text 250 chars"]
+  end
+  n13[("Postgres pgvector")]
+  subgraph g14["Calibration"]
+    n15["rag.calibrate tune and test split"]
+    n16[("calibration.json with fingerprint")]
+    n17{"Relevance gate 0.423"}
+  end
+  subgraph g18["Evidence"]
+    n19["Number sentences of top 6 sources"]
+    n20["LLM picks up to 10 sentence IDs"]
+    n21["Code looks up exact quotes"]
+  end
+  subgraph g22["Answer"]
+    n23["LLM answers from quotes only"]
+    n24["Drop mixed-in refusal sentences"]
+  end
+  subgraph g25["Verify"]
+    n26["Split into sentences"]
+    n27["Exact quote match"]
+    n28["Cite uncited sentences from closest quote"]
+    n29["Batch LLM fact check"]
+    n30["Remove unsupported sentences"]
+  end
+  n31["Refusal"]
+  n1 -->|"question + history"| n5
+  n2 --> n5
+  n3 --> n5
+  n5 -->|"refers back"| n6
+  n5 -->|"standalone"| n8
+  n6 --> n8
+  n6 --> n9
+  n8 <--> n13
+  n9 <--> n13
+  n8 --> n10
+  n9 --> n10
+  n10 -->|"24 candidates"| n11
+  n11 --> n17
+  n15 --> n16
+  n16 -->|"threshold, stale warning"| n17
+  n17 -->|"best score below gate"| n31
+  n17 --> n12
+  n12 --> n19
+  n19 --> n20
+  n20 -->|"IDs like 2.5"| n21
+  n21 -->|"no valid evidence"| n31
+  n21 -->|"verified quotes"| n23
+  n23 --> n24
+  n24 --> n26
+  n26 --> n27
+  n26 --> n28
+  n27 -->|"accepted"| n30
+  n28 --> n29
+  n26 -->|"other sentences"| n29
+  n29 --> n30
+  n30 -->|"nothing supported left"| n31
+  n30 -->|"answer, citations, verdicts"| n1
+  classDef gray fill:#6b728022,stroke:#6b7280,stroke-width:1.5px
+  classDef green fill:#2b835222,stroke:#2b8352,stroke-width:1.5px
+  classDef blue fill:#2c66c422,stroke:#2c66c4,stroke-width:1.5px
+  classDef purple fill:#7148c022,stroke:#7148c0,stroke-width:1.5px
+  classDef orange fill:#bf671622,stroke:#bf6716,stroke-width:1.5px
+  classDef red fill:#c2343422,stroke:#c23434,stroke-width:1.5px
+  class n1,n2,n3 gray
+  class n5,n6,n23,n24 purple
+  class n8,n9,n10,n11,n12,n13 blue
+  class n15,n16,n17,n26,n27,n28,n29,n30 orange
+  class n19,n20,n21 green
+  class n31 red
+  style g0 fill:#6b72800f,stroke:#6b7280,stroke-dasharray:5 4
+  style g4 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4
+  style g7 fill:#2c66c40f,stroke:#2c66c4,stroke-dasharray:5 4
+  style g14 fill:#bf67160f,stroke:#bf6716,stroke-dasharray:5 4
+  style g18 fill:#2b83520f,stroke:#2b8352,stroke-dasharray:5 4
+  style g22 fill:#7148c00f,stroke:#7148c0,stroke-dasharray:5 4
+  style g25 fill:#bf67160f,stroke:#bf6716,stroke-dasharray:5 4

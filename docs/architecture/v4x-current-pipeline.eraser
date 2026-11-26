@@ -1,0 +1,85 @@
+title V4.3 - Current pipeline (calibrated gate, partial answers, web app)
+direction down
+colorMode bold
+styleMode shadow
+
+Interfaces [color: gray] {
+  Web app rag.web [icon: globe]
+  Terminal chat rag.chat [icon: terminal]
+  Evaluation rag.eval [icon: clipboard]
+}
+
+Understand [color: purple] {
+  Follow-up check [shape: diamond, icon: help-circle]
+  Rewrite question [icon: edit]
+}
+
+Retrieve [color: blue] {
+  Vector search top 30 [icon: search]
+  Keyword search top 30 [icon: type]
+  RRF fusion [icon: git-merge]
+  Reranker top 8 [icon: bar-chart-2]
+  Neighbour text 250 chars [icon: layers]
+}
+
+Postgres pgvector [shape: cylinder, icon: database, color: blue]
+
+Calibration [color: orange] {
+  rag.calibrate tune and test split [icon: sliders]
+  calibration.json with fingerprint [shape: cylinder, icon: file]
+  Relevance gate 0.423 [shape: diamond, icon: filter]
+}
+
+Evidence [color: green] {
+  Number sentences of top 6 sources [icon: list]
+  LLM picks up to 10 sentence IDs [icon: message-circle]
+  Code looks up exact quotes [icon: code]
+}
+
+Answer [color: purple] {
+  LLM answers from quotes only [icon: message-circle]
+  Drop mixed-in refusal sentences [icon: scissors]
+}
+
+Verify [color: orange] {
+  Split into sentences [icon: align-left]
+  Exact quote match [icon: check]
+  Cite uncited sentences from closest quote [icon: link]
+  Batch LLM fact check [icon: shield]
+  Remove unsupported sentences [icon: trash]
+}
+
+Refusal [icon: x-octagon, color: red]
+
+Web app rag.web > Follow-up check: question + history
+Terminal chat rag.chat > Follow-up check
+Evaluation rag.eval > Follow-up check
+Follow-up check > Rewrite question: refers back
+Follow-up check > Vector search top 30: standalone
+Rewrite question > Vector search top 30
+Rewrite question > Keyword search top 30
+Vector search top 30 <> Postgres pgvector
+Keyword search top 30 <> Postgres pgvector
+Vector search top 30 > RRF fusion
+Keyword search top 30 > RRF fusion
+RRF fusion > Reranker top 8: 24 candidates
+Reranker top 8 > Relevance gate 0.423
+rag.calibrate tune and test split > calibration.json with fingerprint
+calibration.json with fingerprint > Relevance gate 0.423: threshold, stale warning
+Relevance gate 0.423 > Refusal: best score below gate
+Relevance gate 0.423 > Neighbour text 250 chars
+Neighbour text 250 chars > Number sentences of top 6 sources
+Number sentences of top 6 sources > LLM picks up to 10 sentence IDs
+LLM picks up to 10 sentence IDs > Code looks up exact quotes: IDs like 2.5
+Code looks up exact quotes > Refusal: no valid evidence
+Code looks up exact quotes > LLM answers from quotes only: verified quotes
+LLM answers from quotes only > Drop mixed-in refusal sentences
+Drop mixed-in refusal sentences > Split into sentences
+Split into sentences > Exact quote match
+Split into sentences > Cite uncited sentences from closest quote
+Exact quote match > Remove unsupported sentences: accepted
+Cite uncited sentences from closest quote > Batch LLM fact check
+Split into sentences > Batch LLM fact check: other sentences
+Batch LLM fact check > Remove unsupported sentences
+Remove unsupported sentences > Refusal: nothing supported left
+Remove unsupported sentences > Web app rag.web: answer, citations, verdicts

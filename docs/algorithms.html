@@ -1,0 +1,716 @@
+<title>RAG Algorithm Field Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: sticky stage index on the left, one reading column of algorithm entries; each entry = idea, steps, parameters, live demo. Same palette as the architecture explorer. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --sunk: #eceef3; --fg: #171c28; --muted: #5a6273; --line: #d8dce5;
+  --accent: #b5287a; --accent-soft: #f7e3ef; --ok: #23824f; --ok-soft: #e0f2e8; --warn: #a8640c; --warn-soft: #fbeedb;
+  --bad: #b8322f; --bad-soft: #fbe4e3; --blue: #2c66c4; --blue-soft: #e0eafa;
+  --display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --ok: #5ccb8d; --ok-soft: #13301f; --warn: #eaa75a; --warn-soft: #33240f;
+  --bad: #f07d79; --bad-soft: #3a1a19; --blue: #71a3f0; --blue-soft: #172742;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --ok: #5ccb8d; --ok-soft: #13301f; --warn: #eaa75a; --warn-soft: #33240f;
+  --bad: #f07d79; --bad-soft: #3a1a19; --blue: #71a3f0; --blue-soft: #172742;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.65 var(--body); }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.page { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 900px) { .page { grid-template-columns: minmax(0, 1fr); gap: 20px; } .toc { position: static !important; max-height: none !important; } }
+
+.toc { position: sticky; top: calc(20px + env(safe-area-inset-top, 0px)); align-self: start; max-height: calc(100vh - 40px); overflow: auto; font-size: 13.5px; }
+.toc p { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 0 4px; }
+.toc p:first-child { margin-top: 0; }
+.toc a { display: block; color: var(--fg); text-decoration: none; padding: 2px 8px; border-left: 2px solid transparent; }
+.toc a:hover { border-left-color: var(--accent); color: var(--accent); }
+@media (max-width: 900px) { .toc { columns: 2; column-gap: 16px; } .toc p { break-after: avoid; } }
+
+main { min-width: 0; }
+header.intro h1 { font-family: var(--display); font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 10px; text-wrap: balance; }
+header.intro p { max-width: 68ch; color: var(--muted); margin: 0 0 8px; }
+.pipeline { margin: 24px 0 8px; overflow-x: auto; }
+.pipeline svg { display: block; min-width: 760px; width: 100%; height: auto; }
+
+h2.stage { font: 600 12px var(--body); text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin: 56px 0 4px; display: flex; gap: 10px; align-items: center; }
+h2.stage::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+section.algo { margin: 18px 0 0; padding: 22px 0 8px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+h2.stage + section.algo { border-top: 0; }
+section.algo h3 { font-family: var(--display); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
+.where { font: 12.5px var(--mono); color: var(--muted); margin: 0 0 12px; }
+section.algo p, section.algo li { max-width: 70ch; }
+section.algo h4 { font: 600 12px var(--body); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 18px 0 6px; }
+ol.steps { padding-left: 1.3em; margin: 0; }
+ol.steps li { margin: 3px 0; }
+.formula { font: 15px var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 10px 0; overflow-x: auto; white-space: pre; max-width: 70ch; }
+table.params { border-collapse: collapse; font-size: 13.5px; width: 100%; max-width: 760px; }
+.tablewrap { overflow-x: auto; }
+table.params th, table.params td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.params th { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+table.params td:nth-child(2) { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 760px; margin: 12px 0; }
+@media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+.note { padding: 10px 14px; border-radius: 8px; font-size: 14px; min-width: 0; }
+.note b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 2px; }
+.note.why { background: var(--blue-soft); } .note.why b { color: var(--blue); }
+.note.fail { background: var(--warn-soft); } .note.fail b { color: var(--warn); }
+
+/* demos */
+.demo { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin: 16px 0 4px; max-width: 860px; min-width: 0; }
+.demo-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.demo-head span { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.demo-body { padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13.5px; }
+.controls label { display: inline-flex; align-items: center; gap: 8px; }
+.controls input[type=range] { accent-color: var(--accent); width: 160px; }
+.controls output { font: 12.5px var(--mono); min-width: 3.5em; font-variant-numeric: tabular-nums; }
+textarea, input[type=text] { width: 100%; font: 13px/1.5 var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--sunk); color: var(--fg); }
+textarea { resize: vertical; min-height: 110px; }
+.btn { font: 500 12.5px var(--body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.chunks { display: grid; gap: 8px; }
+.chunk { border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: 12.5px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.chunk .lbl { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.chunk mark { background: var(--accent-soft); color: inherit; border-radius: 2px; }
+.lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 700px) { .lists { grid-template-columns: 1fr; } }
+.rank h5 { margin: 0 0 6px; font: 600 12px var(--body); color: var(--muted); }
+.rank ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; counter-reset: r; }
+.rank li { display: flex; align-items: center; gap: 6px; background: var(--sunk); border-radius: 6px; padding: 4px 6px; font-size: 13px; counter-increment: r; min-width: 0; }
+.rank li::before { content: counter(r); font: 600 11px var(--mono); color: var(--muted); width: 1.4em; flex: none; }
+.rank li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank li button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 3px; font-size: 13px; }
+.rank li button:hover { color: var(--accent); }
+.rank .score { font: 11.5px var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.gate svg { display: block; width: 100%; height: auto; }
+.gate-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.stat { background: var(--sunk); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.stat b { display: block; font: 600 1.25rem var(--display); font-variant-numeric: tabular-nums; }
+.stat.bad b { color: var(--bad); } .stat.ok b { color: var(--ok); }
+.ids { display: flex; flex-wrap: wrap; gap: 4px; }
+.sent { display: flex; gap: 8px; font-size: 13.5px; padding: 3px 6px; border-radius: 5px; cursor: pointer; align-items: baseline; }
+.sent:hover { background: var(--sunk); }
+.sent code { flex: none; color: var(--muted); }
+.sent.sel { background: var(--accent-soft); }
+.sent.ctx { background: var(--ok-soft); }
+.quote { border-left: 3px solid var(--ok); background: var(--ok-soft); padding: 6px 10px; border-radius: 0 6px 6px 0; font-size: 13.5px; margin: 4px 0; }
+.quote.bad { border-color: var(--bad); background: var(--bad-soft); }
+.verdict { display: inline-block; font: 600 11.5px var(--mono); padding: 2px 8px; border-radius: 999px; }
+.verdict.yes { background: var(--ok-soft); color: var(--ok); } .verdict.no { background: var(--sunk); color: var(--muted); }
+.flowtable td:first-child { font-family: var(--body) !important; white-space: normal !important; }
+footer { margin-top: 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Algorithms">
+  <p>Overview</p><a href="#pipeline">The pipeline</a>
+  <p>Ingest</p><a href="#cleaning">Loading and cleaning</a><a href="#incremental">Incremental ingest</a><a href="#chunking">Chunking</a><a href="#embedding">Embeddings and cosine</a>
+  <p>Index</p><a href="#hnsw">HNSW vector index</a><a href="#fulltext">Full-text index</a>
+  <p>Retrieve</p><a href="#keyword">Keyword search</a><a href="#rrf">Reciprocal rank fusion</a><a href="#rerank">Cross-encoder reranking</a><a href="#images">Image intent</a><a href="#neighbours">Neighbour expansion</a>
+  <p>Gate</p><a href="#gate">Relevance gate</a><a href="#calibration">Calibration</a>
+  <p>Answer</p><a href="#followup">Follow-up rewriting</a><a href="#evidence">Evidence by sentence ID</a><a href="#constrained">Constrained JSON decoding</a><a href="#answering">Answering rules</a>
+  <p>Verify</p><a href="#claims">Claim splitting</a><a href="#verify">Verification cascade</a><a href="#refusal">Refusal handling</a>
+  <p>Measure</p><a href="#eval">Evaluation and grading</a><a href="#perf">Latency mechanics</a>
+</nav>
+
+<main>
+<header class="intro" id="pipeline">
+  <h1>RAG Algorithm Field Guide</h1>
+  <p>Every algorithm in the local RAG chatbot, in the order a question meets it, with the exact parameters from the code (V4.3). Each entry explains the idea, the steps, why it was chosen, and how it can fail. The demos run the same logic as the Python, ported to the page.</p>
+  <p>The system answers questions about 35 Wikipedia articles, 20 arXiv papers and 100 NASA images (155 documents, 3,537 chunks) using <code>qwen3:4b-instruct</code> and <code>nomic-embed-text</code> on a laptop.</p>
+  <div class="pipeline" aria-label="Pipeline overview">
+    <svg viewBox="0 0 980 150" role="img" aria-label="Question flows through rewrite, retrieve, gate, evidence, answer and verify">
+      <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+        <g id="pipeboxes"></g>
+      </g>
+    </svg>
+  </div>
+</header>
+
+<h2 class="stage">Ingest</h2>
+
+<section class="algo" id="cleaning">
+  <h3>Loading and cleaning</h3>
+  <p class="where">rag/loaders.py · clean_wikipedia, clean_pdf_page, load_image, load_manifest</p>
+  <p>All three document types become plain text with a title and a source link, so one retrieval pipeline serves them all. Every downstream step reads <code>data/raw/manifest.jsonl</code>, one line per file.</p>
+  <ol class="steps">
+    <li><b>Wikipedia text:</b> cut everything from "See also", "References", "Notes", "External links" onwards; strip heading markup.</li>
+    <li><b>PDF:</b> extract text per page with <code>pypdf</code>; join hyphenated words split across lines ("observa-\ntion" → "observation") and soft line wraps; strip control characters (Postgres rejects the NUL byte). The arXiv abstract from the manifest becomes page 0.</li>
+    <li><b>Image:</b> a text document built from metadata: <code>Image: title</code>, date, keywords and NASA's description. The pixels are never read.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Reference sections are dense with names and dates that match many questions but answer none. Images need text to be searchable, and NASA's captions are detailed.</div>
+    <div class="note fail"><b>Fails when</b>PDF tables and figures become run-on text, and an image with a poor caption is effectively invisible.</div>
+  </div>
+</section>
+
+<section class="algo" id="incremental">
+  <h3>Incremental ingest by content hash</h3>
+  <p class="where">rag/store.py · content_hash, is_current, upsert_document · rag/ingest.py</p>
+  <p>Each document's text sections are hashed (SHA-256). Before embedding, ingest asks the database whether a row exists with the same team, path, hash and embedding model. If it does, the document is skipped; if not, the old rows are deleted and the new chunks inserted in one transaction.</p>
+  <div class="formula">skip(doc) ⇔ ∃ row: team = T ∧ path = p ∧ content_hash = sha256(sections) ∧ embed_model = M</div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Embedding is the slowest part of ingest (~40 chunks/s on the laptop). Re-running after adding a few files costs seconds, not minutes. Including the model name means switching embedders re-embeds everything automatically.</div>
+    <div class="note fail"><b>Fails when</b>Chunking parameters change but the text doesn't: the hash is the same, so old chunks stay. Use <code>--force</code>.</div>
+  </div>
+</section>
+
+<section class="algo" id="chunking">
+  <h3>Chunking: greedy paragraph packing with overlap</h3>
+  <p class="where">rag/chunking.py · chunk_text(text, max_chars=1200, overlap=200)</p>
+  <ol class="steps">
+    <li>Split the text into paragraphs on blank lines and collapse whitespace inside each.</li>
+    <li>A paragraph longer than <code>max_chars</code> is split on sentence ends; a single sentence still too long is cut every <code>max_chars</code> characters.</li>
+    <li>Pack paragraphs greedily into a buffer until the next one would exceed <code>max_chars</code>; then emit the chunk.</li>
+    <li>Start the next chunk with the last ~<code>overlap</code> characters of the previous one (cut forward to a word boundary), if it still fits.</li>
+  </ol>
+  <div class="demo" id="chunkDemo">
+    <div class="demo-head"><span>Try it · same algorithm as chunk_text</span><button class="btn" id="chunkReset" type="button">Reset text</button></div>
+    <div class="demo-body">
+      <textarea id="chunkText" aria-label="Text to chunk"></textarea>
+      <div class="controls">
+        <label>max_chars <input type="range" id="chunkMax" min="120" max="700" step="10" value="300"><output id="chunkMaxOut">300</output></label>
+        <label>overlap <input type="range" id="chunkOv" min="0" max="200" step="10" value="60"><output id="chunkOvOut">60</output></label>
+        <span class="mono" id="chunkCount"></span>
+      </div>
+      <div class="chunks" id="chunkOut"></div>
+      <p class="where" style="margin:0">Highlighted text is the overlap repeated from the previous chunk. The real setting is 1,200 / 200; the demo uses smaller numbers so the effect is visible on a short text.</p>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Paragraphs are natural units of meaning, so packing them keeps facts whole. 1,200 characters fits comfortably in the embedder and the reranker. Overlap keeps a fact that sits on a boundary findable from either side.</div>
+    <div class="note fail"><b>Fails when</b>A pronoun's subject is in the previous chunk ("It launched in 1977"). That is what <a href="#neighbours">neighbour expansion</a> fixes at query time.</div>
+  </div>
+</section>
+
+<section class="algo" id="embedding">
+  <h3>Embeddings and cosine similarity</h3>
+  <p class="where">rag/ollama.py · embed_documents, embed_query · model nomic-embed-text, 768 dimensions</p>
+  <p>An embedding model maps text to a point in 768-dimensional space so that texts with similar meaning land close together. Closeness is measured by the angle between vectors:</p>
+  <div class="formula">cos(q, d) = (q · d) / (‖q‖ ‖d‖)          pgvector distance  q &lt;=&gt; d = 1 − cos(q, d)</div>
+  <ol class="steps">
+    <li>Each chunk is embedded as <code>search_document: {title}\n{chunk}</code>. Prepending the title gives every chunk its subject, even one that only says "it".</li>
+    <li>Questions are embedded as <code>search_query: {question}</code>. nomic-embed-text was trained with these task prefixes; leaving them out measurably lowers retrieval quality.</li>
+    <li>Documents are embedded in batches of 32; inputs over the model's context are truncated.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Open weights, 274 MB, fast on a laptop, 8k-token context, good retrieval quality for its size.</div>
+    <div class="note fail"><b>Fails when</b>Exact identifiers matter ("PIXL", "GW150914"): embeddings blur rare tokens. That is why <a href="#keyword">keyword search</a> runs alongside.</div>
+  </div>
+</section>
+
+<h2 class="stage">Index</h2>
+
+<section class="algo" id="hnsw">
+  <h3>HNSW: approximate nearest-neighbour search</h3>
+  <p class="where">rag/store.py · CREATE INDEX … USING hnsw (embedding vector_cosine_ops) · search()</p>
+  <p>Comparing a question with every stored vector is exact but linear in corpus size. HNSW (Hierarchical Navigable Small World) builds a layered proximity graph instead and walks it greedily.</p>
+  <div class="pipeline" style="margin:8px 0">
+    <svg viewBox="0 0 760 210" role="img" aria-label="Three HNSW layers; search enters at the sparse top layer and descends">
+      <g font-family="IBM Plex Mono, monospace" font-size="11" id="hnswSvg"></g>
+    </svg>
+  </div>
+  <ol class="steps">
+    <li><b>Build:</b> each vector is inserted at a random top layer (exponentially fewer nodes per higher layer) and linked to its <i>m</i> nearest neighbours on every layer it occupies (pgvector default m = 16, ef_construction = 64).</li>
+    <li><b>Search:</b> enter at the top layer, greedily move to whichever neighbour is closer to the query until no neighbour improves, then drop a layer and repeat. On the bottom layer keep a candidate list of size <i>ef_search</i> (default 40) and return the best <i>k</i>.</li>
+    <li><b>Filtering:</b> every query filters by team, embedding model and optionally document type. A plain HNSW scan returns the top 40 and then filters, which can leave fewer than <i>k</i> results. The code sets <code>hnsw.iterative_scan = relaxed_order</code> (pgvector 0.8), so the scan keeps going until enough rows pass the filter.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Search cost grows roughly with log(n), so tens of millions of vectors stay in the tens of milliseconds while the graph fits in RAM. At 3,537 chunks the index is 14 MB.</div>
+    <div class="note fail"><b>Fails when</b>It's approximate: a true nearest neighbour can be missed. That's harmless here because 30 candidates feed a reranker. At scale, the graph must fit in memory or latency jumps.</div>
+  </div>
+</section>
+
+<section class="algo" id="fulltext">
+  <h3>Full-text index: tsvector + GIN</h3>
+  <p class="where">rag/store.py · chunks.tsv = to_tsvector('english', title || ' ' || content) · GIN index</p>
+  <p>Postgres turns text into a <i>tsvector</i>: lowercased, stemmed lexemes with their positions, minus stop words. "The rovers landed" becomes <code>'land':3 'rover':2</code>. A GIN (generalized inverted) index maps each lexeme to the chunks containing it, like the index at the back of a book.</p>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Exact-term matching lives in the same database as the vectors, so there's no second search service to run. Including the title lets "Juno" match every chunk of the Juno article.</div>
+    <div class="note fail"><b>Fails when</b>English stemming only; no typo tolerance ("Chandrayan" misses "Chandrayaan"). The vector side covers those cases.</div>
+  </div>
+</section>
+
+<h2 class="stage">Retrieve</h2>
+
+<section class="algo" id="keyword">
+  <h3>Keyword search: OR query ranked by cover density</h3>
+  <p class="where">rag/store.py · keyword_search · plainto_tsquery → OR → ts_rank_cd · top 30</p>
+  <ol class="steps">
+    <li><code>plainto_tsquery('english', question)</code> builds an AND query of the question's lexemes: <code>'pixl' &amp; 'instrument' &amp; 'persever'</code>.</li>
+    <li>The code rewrites every <code>&amp;</code> to <code>|</code>, so a chunk matching <i>any</i> term qualifies. With AND, one word missing from a long question would discard the right chunk.</li>
+    <li>Matches are ranked by <code>ts_rank_cd</code> (cover density): chunks where more query terms appear <i>close together</i> rank higher.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>OR maximizes recall; precision is the reranker's job.</div>
+    <div class="note fail"><b>Fails when</b>At millions of chunks, common words ("launched") match a large share of rows and all of them get ranked. A BM25 index is the fix at that scale.</div>
+  </div>
+</section>
+
+<section class="algo" id="rrf">
+  <h3>Reciprocal rank fusion</h3>
+  <p class="where">rag/retrieval.py · rrf_fuse · RRF_K = 60 · fused pool cut to 24</p>
+  <p>Vector and keyword scores live on different scales (cosine 0–1 versus unbounded <code>ts_rank_cd</code>), so they can't be added. RRF ignores the scores and uses only each chunk's rank in each list:</p>
+  <div class="formula">RRF(d) = Σ over lists L containing d   1 / (k + rank_L(d))        k = 60</div>
+  <p>A chunk ranked high by either method scores well; a chunk ranked high by <i>both</i> scores best. The constant <i>k</i> damps the gap between rank 1 and rank 2, so one list can't dominate.</p>
+  <div class="demo">
+    <div class="demo-head"><span>Try it · reorder either list</span><label class="controls" style="gap:8px">k <input type="range" id="rrfK" min="1" max="120" value="60" aria-label="k"><output id="rrfKOut">60</output></label></div>
+    <div class="demo-body">
+      <div class="lists">
+        <div class="rank"><h5>Vector search ranking</h5><ol id="rrfVec"></ol></div>
+        <div class="rank"><h5>Keyword search ranking</h5><ol id="rrfKey"></ol></div>
+        <div class="rank"><h5>Fused (sent to the reranker)</h5><ol id="rrfOut"></ol></div>
+      </div>
+      <p class="where" style="margin:0">Example for "What does PIXL do on Perseverance?". The PIXL paper section ranks 4th by meaning but 1st by the exact term, and fusion puts it on top. Lower <i>k</i> makes first places count more.</p>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>No score normalization or weights to tune, and it's robust when one method fails completely for a query.</div>
+    <div class="note fail"><b>Fails when</b>A chunk found by only one method at a low rank stays low. Acceptable, because the top 24 go to the reranker anyway.</div>
+  </div>
+</section>
+
+<section class="algo" id="rerank">
+  <h3>Cross-encoder reranking</h3>
+  <p class="where">rag/rerank.py · jinaai/jina-reranker-v1-turbo-en (ONNX, fastembed) · pool 24 → top 8 · score = sigmoid(logit)</p>
+  <p>The embedding model is a <i>bi-encoder</i>: question and chunk are encoded separately, then compared. A <i>cross-encoder</i> reads them together, so every question word can attend to every chunk word. It is far more accurate and far slower, so it only sees the 24 fused candidates.</p>
+  <ol class="steps">
+    <li>For each candidate, score the pair <code>(question, title + "\n" + chunk)</code>.</li>
+    <li>Map the raw logit to 0–1 with the logistic function: <code>s = 1 / (1 + e^(−logit))</code>.</li>
+    <li>Sort by <code>s</code> and keep the top 8. That score becomes the chunk's relevance and drives the <a href="#gate">gate</a>.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>jina turbo gave the same top results as bge-reranker-v2-m3 in testing at 0.7 s instead of 6.3 s on CPU. Its scores also separate real questions from off-topic ones far better than cosine did.</div>
+    <div class="note fail"><b>Fails when</b>Scores are relative, not probabilities. A question that is on-topic but unanswerable can still score 0.87, so the gate can't be the only defence.</div>
+  </div>
+</section>
+
+<section class="algo" id="images">
+  <h3>Image intent</h3>
+  <p class="where">rag/retrieval.py · VISUAL_INTENT · _ensure_images · IMAGES_PER_VISUAL_QUERY = 3</p>
+  <p>If the question matches <code>\b(images|image of|pictures?|photos?|photographs?|show me|looks? like)\b</code>, ten more candidates are fetched from images only and added to the rerank pool, and the final list puts the best 3 images first. "Image" on its own isn't a trigger, because papers say "we image the surface".</p>
+</section>
+
+<section class="algo" id="neighbours">
+  <h3>Neighbour expansion</h3>
+  <p class="where">rag/retrieval.py · with_neighbors · NEIGHBOR_CHARS = 250 · store.chunk_neighbors</p>
+  <ol class="steps">
+    <li>For each text or PDF hit, fetch the chunks just before and after it in the same document (one query for all hits).</li>
+    <li>Skip a neighbour that is itself one of the hits; the model already reads it as its own source.</li>
+    <li>Remove the overlap repeated from chunking, then add up to 250 characters of the previous chunk's end and the next chunk's start, cut at word boundaries.</li>
+  </ol>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Chunks often start with "It…" or "The rover…". A little surrounding text restores the subject. Skipping duplicate neighbours and trimming 400 → 250 characters cut the evidence prompt by 24%, with no expected answer lost.</div>
+    <div class="note fail"><b>Fails when</b>The subject is more than 250 characters away; the ±1-sentence evidence context partly covers this.</div>
+  </div>
+</section>
+
+<h2 class="stage">Gate</h2>
+
+<section class="algo" id="gate">
+  <h3>Relevance gate</h3>
+  <p class="where">rag/qa.py · ask() · refuse if max(score of top 8) &lt; threshold · threshold from calibration.json</p>
+  <p>Before any language-model call, look at the best reranker score. If even the best chunk is below the threshold, answer "I don't know based on the available documents." The model is never asked, so it has no chance to answer from its own memory.</p>
+  <div class="demo gate">
+    <div class="demo-head"><span>Try it · the real scores of all 47 evaluation questions</span>
+      <span class="controls" style="gap:6px"><button class="btn" type="button" data-t="0.3">hand-set 0.30</button><button class="btn" type="button" data-t="0.501">midpoint 0.501</button><button class="btn" type="button" data-t="0.423" aria-pressed="true">current 0.423</button></span></div>
+    <div class="demo-body">
+      <div class="controls"><label>threshold <input type="range" id="gateT" min="0" max="1" step="0.001" value="0.423"><output id="gateTOut">0.423</output></label></div>
+      <svg id="gateSvg" viewBox="0 0 820 230" role="img" aria-label="Strip plot of reranker scores for answerable and trap questions with the threshold line"></svg>
+      <div class="gate-stats" id="gateStats"></div>
+      <p class="where" style="margin:0">Hover a dot to see its question. Hollow dots are the held-out test split.</p>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Off-topic questions score 0.01–0.11 while every answerable one scores at least 0.46. The gate removes them for free and with certainty.</div>
+    <div class="note fail"><b>Fails when</b>Traps that are on-topic but not answered by the documents (Gagarin's breakfast 0.69, NASA tweets 0.79, a cost in euros 0.87) overlap real questions. They pass the gate and are stopped later by evidence selection.</div>
+  </div>
+</section>
+
+<section class="algo" id="calibration">
+  <h3>Threshold calibration</h3>
+  <p class="where">rag/calibrate.py · split_of, choose_threshold, fingerprint, apply · position = 0.25</p>
+  <ol class="steps">
+    <li><b>Score:</b> run only retrieval (no answer generation) for every evaluation question and record the best score. About 25 s.</li>
+    <li><b>Split:</b> assign each question to <i>tune</i> or <i>test</i> by a stable hash: <code>int(sha1(q)[:8], 16) mod 100 &lt; 30 → test</code>.</li>
+    <li><b>Choose</b> on the tune split only:
+      <div class="formula">floor   = lowest answerable score (after allowing 1 − min_recall to fall below)
+ceiling = highest trap score below floor
+t       = ceiling + (floor − ceiling) × position        position = 0.25</div></li>
+    <li><b>Report</b> on the test split: answerable questions wrongly refused, traps stopped.</li>
+    <li><b>Fingerprint:</b> save <i>t</i> with the team, embedding model, scorer and a corpus digest (SHA-256 over every document's path, content hash and chunk count). At start-up, chat, eval and the web app recompute it and print <code>STALE</code> if anything changed.</li>
+  </ol>
+  <p>Position 0.25 leans the threshold towards the traps because the two errors aren't equal: a refused real question is lost, while a trap that passes still faces evidence selection and the fact check. The midpoint rule (0.501) wrongly refused a held-out question at 0.46; that's what changed the rule, so the case no longer counts as a clean test.</p>
+</section>
+
+<h2 class="stage">Answer</h2>
+
+<section class="algo" id="followup">
+  <h3>Follow-up detection and rewriting</h3>
+  <p class="where">rag/qa.py · needs_rewrite, FOLLOW_UP, rewrite_question · last 4 turns</p>
+  <p>Search needs a self-contained question: "When was it launched?" retrieves nothing useful. If there is chat history <i>and</i> the question could refer back, one JSON-constrained LLM call rewrites it ("When was Voyager 1 launched?"). The history is used only for that; it is never a source of facts.</p>
+  <p>The check is a regular expression for pronouns and demonstratives (<i>it, its, they, this, those, there, same, other…</i>), definite references (<i>the rover, the mission, the telescope…</i>), openers (<i>and…, what about…</i>), or a question of at most two words.</p>
+  <div class="demo">
+    <div class="demo-head"><span>Try it · same pattern as needs_rewrite</span></div>
+    <div class="demo-body">
+      <input type="text" id="fuInput" value="Where did the rover land?" aria-label="Question">
+      <div id="fuOut"></div>
+      <div class="controls" id="fuExamples"></div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>The rewrite costs about 1 s; most questions in a conversation are already standalone.</div>
+    <div class="note fail"><b>Fails when</b>An elliptical follow-up uses none of these words ("How many days before the final plunge was the aurora image taken?"). It still worked in testing because its own words were specific enough to find the right image.</div>
+  </div>
+</section>
+
+<section class="algo" id="evidence">
+  <h3>Evidence selection by sentence ID</h3>
+  <p class="where">rag/grounding.py · number_sentences, quotes_from_ids · rag/qa.py · select_evidence · top 6 sources, ≤ 10 IDs, ±1 sentence</p>
+  <ol class="steps">
+    <li>Split each of the top 6 sources into sentences and number them <code>source.sentence</code> (<code>2.5</code> = source 2, sentence 5), up to 40 per source. An image is a single unit, clipped to 600 characters at a sentence end.</li>
+    <li>The model sees the numbered sentences and the question and returns only IDs, as JSON with at most 10 items.</li>
+    <li>Code turns IDs into quotes: each ID also brings the sentence before and after it; consecutive sentences of one source merge into one quote. An ID that doesn't exist is kept as an <i>unverified</i> quote, shown but never used.</li>
+    <li>No valid ID → refuse. Otherwise only these quotes go to the answer step.</li>
+  </ol>
+  <div class="demo">
+    <div class="demo-head"><span>Try it · click sentences to "select" their IDs</span><button class="btn" type="button" id="evInvent">Add invented ID 3.9</button></div>
+    <div class="demo-body">
+      <div id="evSources"></div>
+      <div><h4 style="margin:4px 0">Selected IDs</h4><div class="mono" id="evIds">none</div></div>
+      <div><h4 style="margin:4px 0">Quotes the answer step receives</h4><div id="evQuotes"></div></div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Quotes are exact source text by construction, since the model can't paraphrase an ID. IDs cost about 15 output tokens; copying quotes cost about 150 (6–11 s) and needed fuzzy matching.</div>
+    <div class="note fail"><b>Fails when</b>The model picks the wrong sentences; the answer then lacks the fact and may refuse. This step is also the main cost: reading the ~2,000-token numbered prompt takes 3.5–5 s.</div>
+  </div>
+</section>
+
+<section class="algo" id="constrained">
+  <h3>Schema-constrained JSON decoding</h3>
+  <p class="where">rag/ollama.py · chat_json(messages, schema) → Ollama "format": schema</p>
+  <p>The rewrite, evidence and fact-check calls pass a JSON Schema. The model runtime turns it into a grammar and masks every token that would break it, so the output always parses. <code>maxItems: 10</code> on the evidence IDs is enforced the same way: one question had produced 74 IDs (15 s of output) before the limit.</p>
+</section>
+
+<section class="algo" id="answering">
+  <h3>Answering rules</h3>
+  <p class="where">rag/qa.py · ANSWER_PROMPT · temperature 0 · at most 400 tokens · num_ctx 8192</p>
+  <ul>
+    <li>Use only the quotes; end every factual sentence with its citations <code>[n]</code>.</li>
+    <li>One fact per sentence; no conclusions or comparisons the quotes don't state.</li>
+    <li>Answer every part of the question; if part is missing, answer the rest and add one sentence naming what is missing. Refuse only when nothing is answerable.</li>
+    <li>At most 4 sentences (8 for lists or details). Describe images in prose and say they can be viewed.</li>
+  </ul>
+  <p>Temperature 0 makes the model pick the most likely token every time, so answers are repeatable for the same input.</p>
+</section>
+
+<h2 class="stage">Verify</h2>
+
+<section class="algo" id="claims">
+  <h3>Claim splitting and citation check</h3>
+  <p class="where">rag/grounding.py · split_claims, check_citations</p>
+  <ol class="steps">
+    <li>Split the answer at sentence ends (a period followed by a capital, quote or bracket) and line breaks; a trailing <code>[1][2]</code> on its own joins the sentence before it.</li>
+    <li>Drop fragments under 25 characters and headings ending in ":".</li>
+    <li>For each sentence, read its citations. No citation → issue <i>no citation</i>; citing a source with no verified quote → issue <i>cites unquoted source</i>. A sentence saying what the documents don't contain ("The documents do not say…") is recorded as a gap statement and isn't treated as a claim.</li>
+  </ol>
+</section>
+
+<section class="algo" id="verify">
+  <h3>Verification cascade</h3>
+  <p class="where">rag/grounding.py · copies_evidence, closest_source, verify_claims, add_citations, remove_claims</p>
+  <p>Each sentence goes down a cascade. Cheap, certain checks come first; the language-model judge sees only what's left.</p>
+  <div class="tablewrap"><table class="params flowtable">
+    <thead><tr><th>Step</th><th>Rule</th><th>Outcome</th></tr></thead>
+    <tbody>
+      <tr><td>Gap statement</td><td>matches "documents/sources do not say…"</td><td>kept, no check</td></tr>
+      <tr><td>Uncited sentence</td><td>argmax over quotes of |words(sentence) ∩ words(quote)|</td><td>given that quote's citation, then judged</td></tr>
+      <tr><td>Exact excerpt</td><td>normalize(sentence) ⊂ normalize(cited quotes)</td><td>supported, no LLM call</td></tr>
+      <tr><td>LLM judge</td><td>one batched call, all remaining sentences</td><td>supported / unsupported + reason</td></tr>
+      <tr><td>No verdict returned</td><td>missing from the judge's JSON</td><td>treated as unsupported</td></tr>
+      <tr><td>Remove</td><td>delete unsupported sentences</td><td>none left → refusal</td></tr>
+      <tr><td>Add citations</td><td>auto-cited sentences that survived</td><td><code>[n]</code> inserted before the final period</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Normalization</b> lowercases, collapses spaces, removes quote marks, brackets and citations. Only a contiguous excerpt counts: "entered interstellar space on August 25, 2013" is not an excerpt of a source saying 2012, even though every word appears in it. <b>Word overlap</b> ignores stop words (<i>the, of, in, was…</i>).</p>
+  <p><b>The judge's rules:</b> paraphrases, synonyms, alternative names and simple inferences (comparing two dates, counting) are supported. A name, number, date, place or event missing from the cited quotes, or contradicting them ("announced" read as "happened"), is not.</p>
+  <div class="pair">
+    <div class="note why"><b>Why</b>Deleting a wrong sentence protects the reader better than a warning under it. Batching makes the check one call (1–4 s) instead of one per sentence.</div>
+    <div class="note fail"><b>Fails when</b>The judge is the same 4B model that wrote the answer, so their errors are correlated. It also rejects whole sentences: a correct fact joined to an unsupported conclusion is lost, which is why the answer prompt asks for one fact per sentence.</div>
+  </div>
+</section>
+
+<section class="algo" id="refusal">
+  <h3>Refusal handling</h3>
+  <p class="where">rag/grounding.py · is_refusal, without_refusal_sentences · rag/qa.py · ask()</p>
+  <p>An answer counts as a refusal only when the refusal sentence is the <i>whole</i> answer. If the model mixes it into other text, that sentence is dropped and everything else goes through the full verification cascade.</p>
+  <div class="note fail" style="max-width:70ch"><b>Bug this closed</b>The first version treated any answer <i>containing</i> "I don't know based on the available documents" as a refusal, which skipped the fact check. A wrong claim ("Cassini was deorbited into Jupiter's atmosphere") got through that way before the fix.</div>
+</section>
+
+<h2 class="stage">Measure</h2>
+
+<section class="algo" id="eval">
+  <h3>Evaluation and grading</h3>
+  <p class="where">rag/eval.py · evals/cases.jsonl (47 cases) · grade()</p>
+  <div class="tablewrap"><table class="params">
+    <thead><tr><th>Case kind</th><th>Pass rule</th><th>Count</th></tr></thead>
+    <tbody>
+      <tr><td>Fact</td><td>every expected item present (case-insensitive); an inner list = any alternative</td><td>32</td></tr>
+      <tr><td>Image</td><td>an image retrieved and the answer not refused</td><td>2</td></tr>
+      <tr><td>Trap</td><td>the answer is a refusal</td><td>13</td></tr>
+      <tr><td>Follow-up</td><td>earlier questions asked first through the same pipeline; then graded as above</td><td>7 of the facts</td></tr>
+    </tbody>
+  </table></div>
+  <p>Reported alongside: traps stopped by the gate, invented evidence IDs, sentences removed by the fact check, the lowest answerable and highest trap scores, and total time. Current: 47/47, 10 of 13 traps stopped at the gate. Substring grading can be fooled (the expected word inside a wrong sentence), and the set was also used for tuning, so a perfect score isn't proof of reliability.</p>
+</section>
+
+<section class="algo" id="perf">
+  <h3>Latency mechanics</h3>
+  <p class="where">docs/performance.md · OLLAMA_KEEP_ALIVE = 30m · Ollama prompt cache</p>
+  <div class="formula">time(call) ≈ prompt_tokens / 600 + output_tokens / 40        seconds, qwen3:4b on an M5 laptop</div>
+  <ul>
+    <li><b>Reading dominates:</b> the evidence prompt is ~2,000 tokens (3.5 s) and its output ~30 tokens (0.8 s). Shrinking input (top 6 sources, deduplicated, 250-character neighbours) saved more than any other change.</li>
+    <li><b>Prompt cache:</b> Ollama reuses the processed start of a recent identical prompt, so a repeated question reads almost instantly. Always benchmark with new questions.</li>
+    <li><b>Keep-alive:</b> every request asks Ollama to keep the models loaded for 30 minutes, and the web app loads them at start; a cold load cost about 5 s.</li>
+    <li><b>Perceived latency:</b> in strict mode the web app streams the draft answer, then replaces it with the checked text. Text appears after about 5 s of an 8–16 s answer.</li>
+  </ul>
+</section>
+
+<footer>Generated from the code at V4.3 of the rag-type-system repository. Architecture diagrams: <code>docs/architecture/viewer.html</code>. Design decisions and rejected alternatives: <code>docs/decisions.md</code>.</footer>
+</main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- pipeline overview ---------- */
+(function pipeline() {
+  const steps = [["Follow-up check", "#followup"], ["Hybrid retrieve", "#keyword"], ["Rerank top 8", "#rerank"], ["Relevance gate", "#gate"],
+                 ["Evidence IDs", "#evidence"], ["Answer", "#answering"], ["Verify", "#verify"]];
+  const w = 124, gap = 16, y = 40, h = 52;
+  let html = "";
+  steps.forEach(([label, href], i) => {
+    const x = 8 + i * (w + gap);
+    html += `<a href="${href}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.2"></rect>
+      <text x="${x + w / 2}" y="${y + h / 2 + 4}" text-anchor="middle" fill="var(--fg)" font-weight="600">${label}</text></a>`;
+    if (i < steps.length - 1) html += `<path d="M${x + w + 2} ${y + h / 2} h${gap - 6}" stroke="var(--muted)" stroke-width="1.4" fill="none"></path><path d="M${x + w + gap - 4} ${y + h / 2} l-5 -4 v8 z" fill="var(--muted)"></path>`;
+  });
+  html += `<text x="8" y="22" fill="var(--muted)" font-size="11.5">question + history</text>
+    <path d="M${8 + 3 * (w + gap) + w / 2} ${y + h} v28" stroke="var(--bad)" stroke-width="1.3" fill="none" stroke-dasharray="4 3"></path>
+    <text x="${8 + 3 * (w + gap) + w / 2}" y="${y + h + 44}" text-anchor="middle" fill="var(--bad)" font-size="11.5">refuse, no LLM call</text>
+    <path d="M${8 + 6 * (w + gap) + w / 2} ${y + h} v28" stroke="var(--ok)" stroke-width="1.3" fill="none"></path>
+    <text x="${8 + 6 * (w + gap) + w / 2}" y="${y + h + 44}" text-anchor="middle" fill="var(--ok)" font-size="11.5">cited, checked answer</text>`;
+  document.querySelector("#pipeboxes").innerHTML = html;
+})();
+
+/* ---------- HNSW sketch ---------- */
+(function hnsw() {
+  const layers = [{ y: 30, nodes: [80, 430], label: "layer 2" }, { y: 100, nodes: [80, 250, 430, 610], label: "layer 1" },
+                  { y: 170, nodes: [80, 160, 250, 330, 430, 520, 610, 690], label: "layer 0 (all vectors)" }];
+  let s = "";
+  layers.forEach(l => {
+    s += `<text x="0" y="${l.y - 14}" fill="var(--muted)">${l.label}</text>`;
+    for (let i = 0; i < l.nodes.length - 1; i++) s += `<line x1="${l.nodes[i]}" y1="${l.y}" x2="${l.nodes[i + 1]}" y2="${l.y}" stroke="var(--line)" stroke-width="1.5"></line>`;
+    l.nodes.forEach(x => { s += `<circle cx="${x}" cy="${l.y}" r="7" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"></circle>`; });
+  });
+  const path = [[80, 30], [430, 30], [430, 100], [610, 100], [610, 170], [520, 170]];
+  s += `<polyline points="${path.map(p => p.join(",")).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.2"></polyline>`;
+  s += `<circle cx="520" cy="170" r="8" fill="var(--accent)"></circle><text x="520" y="200" text-anchor="middle" fill="var(--accent)">nearest to query</text>`;
+  s += `<text x="80" y="54" text-anchor="middle" fill="var(--accent)">entry</text>`;
+  $("hnswSvg").innerHTML = s;
+})();
+
+/* ---------- chunking (port of rag/chunking.py) ---------- */
+const SAMPLE_TEXT = `Voyager 1 is a space probe launched by NASA on September 5, 1977, as part of the Voyager program to study the outer Solar System and the interstellar space beyond the Sun's heliosphere.
+
+It communicates through the NASA Deep Space Network to receive routine commands and to transmit data to Earth. Real-time distance and velocity data are provided by NASA and JPL.
+
+In March 2013, it was announced that Voyager 1 might have become the first spacecraft to enter interstellar space, having detected a marked change in the plasma environment on August 25, 2012. However, until September 12, 2013, it was still an open question.
+
+The probe made flybys of Jupiter, Saturn, and Saturn's largest moon, Titan. NASA had a choice of either conducting a Pluto or Titan flyby; exploration of the moon took priority because it was known to have a substantial atmosphere.`;
+function splitLong(text, max) {
+  const pieces = []; let buf = "";
+  for (let sentence of text.split(/(?<=[.!?])\s+/)) {
+    while (sentence.length > max) { if (buf) { pieces.push(buf); buf = ""; } pieces.push(sentence.slice(0, max)); sentence = sentence.slice(max); }
+    if (buf && buf.length + 1 + sentence.length > max) { pieces.push(buf); buf = sentence; }
+    else buf = buf ? `${buf} ${sentence}` : sentence;
+  }
+  if (buf) pieces.push(buf);
+  return pieces;
+}
+function chunkText(text, max, overlap) {
+  const paragraphs = [];
+  for (let p of text.split(/\n\s*\n/)) { p = p.split(/\s+/).filter(Boolean).join(" "); if (p) paragraphs.push(...(p.length > max ? splitLong(p, max) : [p])); }
+  const chunks = []; let buf = "", bufTail = "";
+  for (const p of paragraphs) {
+    if (buf && buf.length + 2 + p.length > max) {
+      chunks.push({ text: buf, tail: bufTail });
+      let tail = overlap ? buf.slice(-overlap) : "";
+      if (tail && tail.includes(" ")) tail = tail.slice(tail.indexOf(" ") + 1);
+      if (tail && tail.length + 2 + p.length <= max) { buf = `${tail}\n\n${p}`; bufTail = tail; } else { buf = p; bufTail = ""; }
+    } else buf = buf ? `${buf}\n\n${p}` : p;
+  }
+  if (buf) chunks.push({ text: buf, tail: bufTail });
+  return chunks;
+}
+function renderChunks() {
+  const max = +$("chunkMax").value, ov = +$("chunkOv").value;
+  $("chunkMaxOut").textContent = max; $("chunkOvOut").textContent = ov;
+  const chunks = chunkText($("chunkText").value, max, ov);
+  $("chunkCount").textContent = `${chunks.length} chunk${chunks.length === 1 ? "" : "s"}`;
+  $("chunkOut").innerHTML = chunks.map((c, i) => {
+    const body = c.tail && c.text.startsWith(c.tail) ? `<mark>${esc(c.tail)}</mark>${esc(c.text.slice(c.tail.length))}` : esc(c.text);
+    return `<div class="chunk"><span class="lbl">chunk ${i} · ${c.text.length} chars</span>${body}</div>`;
+  }).join("");
+}
+$("chunkText").value = SAMPLE_TEXT;
+["chunkText", "chunkMax", "chunkOv"].forEach(id => $(id).addEventListener("input", renderChunks));
+$("chunkReset").addEventListener("click", () => { $("chunkText").value = SAMPLE_TEXT; renderChunks(); });
+renderChunks();
+
+/* ---------- RRF ---------- */
+const rrf = {
+  vec: ["Perseverance (rover) §8", "Mars 2020 payload image", "Curiosity (rover) §5", "PIXL paper §1", "Mars §14", "Perseverance (rover) §3"],
+  key: ["PIXL paper §1", "PIXL paper §4", "Adaptive sampling with PIXL §2", "Perseverance (rover) §8", "Perseverance (rover) §3", "Mars Exploration Rover image"],
+};
+function renderRRF() {
+  const k = +$("rrfK").value; $("rrfKOut").textContent = k;
+  const scores = {};
+  for (const list of [rrf.vec, rrf.key]) list.forEach((d, i) => { scores[d] = (scores[d] || 0) + 1 / (k + i + 1); });
+  const fused = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const listHtml = name => rrf[name].map((d, i) => `<li><span class="t" title="${esc(d)}">${esc(d)}</span>
+    <button type="button" aria-label="Move up" data-l="${name}" data-i="${i}" data-d="-1">↑</button><button type="button" aria-label="Move down" data-l="${name}" data-i="${i}" data-d="1">↓</button></li>`).join("");
+  $("rrfVec").innerHTML = listHtml("vec"); $("rrfKey").innerHTML = listHtml("key");
+  $("rrfOut").innerHTML = fused.map(([d, s]) => {
+    const both = rrf.vec.includes(d) && rrf.key.includes(d);
+    return `<li><span class="t" title="${esc(d)}">${esc(d)}${both ? " ●" : ""}</span><span class="score">${s.toFixed(4)}</span></li>`;
+  }).join("");
+}
+document.querySelector(".lists").addEventListener("click", e => {
+  const b = e.target.closest("button[data-l]"); if (!b) return;
+  const list = rrf[b.dataset.l], i = +b.dataset.i, j = i + +b.dataset.d;
+  if (j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]]; renderRRF();
+});
+$("rrfK").addEventListener("input", renderRRF);
+renderRRF();
+
+/* ---------- gate (real calibration scores) ---------- */
+const GATE = [{"s":0.88,"split":"test","trap":false,"q":"Who were the crew members of Apollo 11?"},{"s":0.85,"split":"tune","trap":false,"q":"On what date did Apollo 11 land on the Moon?"},{"s":0.98,"split":"tune","trap":false,"q":"When did Voyager 1 enter interstellar space?"},{"s":0.97,"split":"tune","trap":false,"q":"In what year was Voyager 1 launched?"},{"s":0.97,"split":"tune","trap":false,"q":"When was the Hubble Space Telescope launched?"},{"s":0.66,"split":"tune","trap":false,"q":"How large is Hubble's primary mirror?"},{"s":0.94,"split":"tune","trap":false,"q":"When was the James Webb Space Telescope launched?"},{"s":0.97,"split":"tune","trap":false,"q":"What kind of instrument is PIXL on the Perseverance rover?"},{"s":0.95,"split":"tune","trap":false,"q":"Where did the Perseverance rover land on Mars?"},{"s":0.87,"split":"tune","trap":false,"q":"In which crater did the Curiosity rover land?"},{"s":0.99,"split":"tune","trap":false,"q":"When did the Ingenuity helicopter make its first flight on Mars?"},{"s":0.95,"split":"test","trap":false,"q":"When was Sputnik 1 launched?"},{"s":0.98,"split":"tune","trap":false,"q":"In what year did Yuri Gagarin fly into space?"},{"s":0.98,"split":"tune","trap":false,"q":"Where on the Moon did Chandrayaan-3 land?"},{"s":0.96,"split":"test","trap":false,"q":"When was Europa Clipper launched?"},{"s":0.88,"split":"tune","trap":false,"q":"When did New Horizons fly past Pluto?"},{"s":0.87,"split":"tune","trap":false,"q":"When did the Cassini mission end?"},{"s":0.96,"split":"tune","trap":false,"q":"When did Juno arrive at Jupiter?"},{"s":0.91,"split":"tune","trap":false,"q":"When were gravitational waves first directly detected?"},{"s":0.9,"split":"test","trap":false,"q":"Which galaxy's black hole did the Event Horizon Telescope image first?"},{"s":0.97,"split":"tune","trap":false,"q":"When was the Kepler space telescope launched?"},{"s":0.85,"split":"tune","trap":false,"q":"In what year was TESS launched?"},{"s":0.9,"split":"tune","trap":false,"q":"When was the first module of the International Space Station launched?"},{"s":0.93,"split":"tune","trap":false,"q":"How many planets did the TESS Grand Unified Hot Jupiter Survey paper r"},{"s":0.82,"split":"tune","trap":false,"q":"Show me a picture of the Apollo 11 Lunar Module"},{"s":0.82,"split":"tune","trap":false,"q":"Show me pictures of the International Space Station"},{"s":0.06,"split":"tune","trap":true,"q":"What is the capital of France?"},{"s":0.05,"split":"tune","trap":true,"q":"Who wrote Hamlet?"},{"s":0.01,"split":"tune","trap":true,"q":"How do I bake sourdough bread?"},{"s":0.11,"split":"tune","trap":true,"q":"Who won the 2018 FIFA World Cup?"},{"s":0.04,"split":"test","trap":true,"q":"What is the boiling point of ethanol?"},{"s":0.11,"split":"test","trap":true,"q":"How do I sort a list in Python?"},{"s":0.06,"split":"tune","trap":true,"q":"Who painted the Mona Lisa?"},{"s":0.01,"split":"tune","trap":true,"q":"What is the best pizza recipe?"},{"s":0.88,"split":"tune","trap":false,"q":"Which was launched first, Hubble or the Kepler space telescope?"},{"s":0.98,"split":"tune","trap":false,"q":"When did it arrive at Jupiter?"},{"s":0.89,"split":"tune","trap":false,"q":"Who was its commander?"},{"s":0.91,"split":"tune","trap":false,"q":"Where did it land?"},{"s":0.97,"split":"tune","trap":false,"q":"When was it launched?"},{"s":0.15,"split":"test","trap":true,"q":"What was the name of Neil Armstrong's dog?"},{"s":0.87,"split":"tune","trap":true,"q":"What was the Europa Clipper mission's total cost in euros?"},{"s":0.35,"split":"tune","trap":true,"q":"What is the phone number of the Space Telescope Science Institute?"},{"s":0.69,"split":"tune","trap":true,"q":"What did Yuri Gagarin eat for breakfast on the morning of his flight?"},{"s":0.79,"split":"tune","trap":true,"q":"How many tweets did NASA post about the Ingenuity helicopter?"},{"s":0.7,"split":"test","trap":false,"q":"How many days before the final plunge was the aurora image taken, and"},{"s":0.46,"split":"test","trap":false,"q":"Was Juno planned to end the same way?"},{"s":0.75,"split":"tune","trap":false,"q":"In that lightning image Juno took with its star camera, how close was"}];
+function renderGate() {
+  const t = +$("gateT").value; $("gateTOut").textContent = t.toFixed(3);
+  document.querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.t - t) < 0.0005)));
+  const W = 820, x0 = 150, x1 = 800, X = s => x0 + s * (x1 - x0);
+  const rows = [["Answerable", r => !r.trap, "var(--ok)"], ["Traps", r => r.trap, "var(--bad)"]];
+  let s = "";
+  for (let v = 0; v <= 1.0001; v += 0.1) {
+    s += `<line x1="${X(v)}" y1="20" x2="${X(v)}" y2="190" stroke="var(--line)" stroke-width="1"></line><text x="${X(v)}" y="208" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${v.toFixed(1)}</text>`;
+  }
+  s += `<text x="${(x0 + x1) / 2}" y="226" text-anchor="middle" font-size="11" fill="var(--muted)">best reranker score of the question's top 8 chunks</text>`;
+  rows.forEach(([label, pick, color], ri) => {
+    const yc = 65 + ri * 85;
+    s += `<text x="0" y="${yc + 4}" font-size="13" font-weight="600" fill="var(--fg)">${label}</text>`;
+    GATE.filter(pick).forEach((r, i) => {
+      const jitter = ((i * 37) % 11 - 5) * 4.2;
+      const refused = r.s < t;
+      const fill = r.split === "test" ? "var(--surface)" : color;
+      s += `<circle cx="${X(r.s)}" cy="${yc + jitter}" r="6" fill="${fill}" stroke="${color}" stroke-width="2" opacity="${refused ? 0.45 : 1}"><title>${esc(r.q)} · ${r.s.toFixed(2)} · ${r.split}${refused ? " · refused by gate" : ""}</title></circle>`;
+    });
+  });
+  s += `<rect x="${x0}" y="20" width="${X(t) - x0}" height="170" fill="var(--bad-soft)" opacity="0.5"></rect>`;
+  s += `<line x1="${X(t)}" y1="14" x2="${X(t)}" y2="194" stroke="var(--accent)" stroke-width="2.5"></line><text x="${X(t) + 6}" y="16" font-size="11.5" fill="var(--accent)" font-family="IBM Plex Mono, monospace">refuse below ${t.toFixed(3)}</text>`;
+  $("gateSvg").innerHTML = s;
+  const count = (pick) => { const sel = GATE.filter(pick); return `${sel.filter(r => r.s < t).length}/${sel.length}`; };
+  const ansRefused = GATE.filter(r => !r.trap && r.s < t).length;
+  $("gateStats").innerHTML = [
+    [`${count(r => !r.trap && r.split === "tune")}`, "real questions refused (tune)", ansRefused ? "bad" : "ok"],
+    [`${count(r => !r.trap && r.split === "test")}`, "real questions refused (test)", GATE.some(r => !r.trap && r.split === "test" && r.s < t) ? "bad" : "ok"],
+    [`${count(r => r.trap)}`, "traps stopped before the LLM", ""],
+  ].map(([v, l, c]) => `<div class="stat ${c}"><b>${v}</b>${l}</div>`).join("");
+}
+$("gateT").addEventListener("input", renderGate);
+document.querySelectorAll("[data-t]").forEach(b => b.addEventListener("click", () => { $("gateT").value = b.dataset.t; renderGate(); }));
+renderGate();
+
+/* ---------- follow-up detection (port of needs_rewrite) ---------- */
+const FOLLOW_UP = new RegExp(
+  String.raw`\b(it|its|it's|they|them|their|he|him|his|she|her|this|that|these|those|there|then|former|latter|same|other|another|one|ones|else|also|too)\b` +
+  String.raw`|\bthe (mission|rover|lander|telescope|spacecraft|probe|craft|satellite|station|crew|program|programme|paper|image|picture|photo|launch|landing)\b` +
+  String.raw`|^\s*(and|but|so|what about|how about)\b`, "i");
+function renderFollowUp() {
+  const q = $("fuInput").value.trim();
+  const m = q.match(FOLLOW_UP), short = q.split(/\s+/).filter(Boolean).length <= 2;
+  const yes = q && (m || short);
+  $("fuOut").innerHTML = !q ? "" : `<span class="verdict ${yes ? "yes" : "no"}">${yes ? "rewrite with history" : "search as is"}</span> <span class="mono" style="color:var(--muted)">${m ? `matched "${esc(m[0])}"` : short ? "two words or fewer" : "no referring word"}</span>`;
+}
+const FU_EX = ["When was it launched?", "What about Kepler?", "When was the Hubble Space Telescope launched?", "Its commander?", "How many days before the final plunge was the aurora image taken?"];
+$("fuExamples").innerHTML = FU_EX.map(q => `<button class="btn" type="button">${esc(q)}</button>`).join("");
+$("fuExamples").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { $("fuInput").value = b.textContent; renderFollowUp(); } });
+$("fuInput").addEventListener("input", renderFollowUp);
+renderFollowUp();
+
+/* ---------- evidence IDs (port of number_sentences + quotes_from_ids, context = 1) ---------- */
+const EV_SOURCES = [
+  ["Voyager 1", "In March 2013, it was announced that Voyager 1 might have become the first spacecraft to enter interstellar space, having detected a marked change in the plasma environment on August 25, 2012. However, until September 12, 2013, it was still an open question. On that day NASA confirmed that Voyager 1 had crossed the heliopause. The probe was launched on September 5, 1977."],
+  ["Juno (spacecraft)", "Juno entered a polar orbit of Jupiter on July 5, 2016. It is powered by solar arrays. The spacecraft carries three Lego minifigures. Its mission was extended in 2021."],
+];
+const numbered = {};
+EV_SOURCES.forEach(([, text], i) => text.split(/(?<=[.!?])\s+|\n+/).filter(s => s.trim()).slice(0, 40).forEach((s, j) => { numbered[`${i + 1}.${j + 1}`] = [i + 1, s]; }));
+let evSel = ["1.1"];
+function quotesFromIds(ids, context = 1) {
+  const expanded = [];
+  for (const raw of ids) {
+    if (!(raw in numbered) || !context) { expanded.push(raw); continue; }
+    const [src, n] = raw.split(".").map(Number);
+    for (let k = n - context; k <= n + context; k++) if (`${src}.${k}` in numbered) expanded.push(`${src}.${k}`);
+  }
+  const quotes = []; let last = null;
+  for (const raw of [...new Set(expanded)]) {
+    if (!(raw in numbered)) { quotes.push({ source: 0, text: raw, verified: false }); continue; }
+    const [src, text] = numbered[raw], n = +raw.split(".")[1], prev = quotes[quotes.length - 1];
+    if (last && last[0] === src && last[1] === n - 1 && prev && prev.verified && prev.source === src) prev.text += " " + text;
+    else quotes.push({ source: src, text, verified: true });
+    last = [src, n];
+  }
+  return quotes;
+}
+function renderEvidence() {
+  const quotes = quotesFromIds(evSel);
+  const ctx = new Set();
+  evSel.forEach(id => { if (id in numbered) { const [s, n] = id.split(".").map(Number); [n - 1, n + 1].forEach(k => ctx.add(`${s}.${k}`)); } });
+  $("evSources").innerHTML = EV_SOURCES.map(([title], i) => `<div style="margin-bottom:8px"><b style="font-size:13px">[${i + 1}] ${esc(title)}</b>` +
+    Object.entries(numbered).filter(([, [s]]) => s === i + 1).map(([id, [, t]]) =>
+      `<div class="sent ${evSel.includes(id) ? "sel" : ctx.has(id) ? "ctx" : ""}" data-id="${id}" tabindex="0" role="button" aria-pressed="${evSel.includes(id)}"><code>${id}</code><span>${esc(t)}</span></div>`).join("") + "</div>").join("");
+  $("evIds").textContent = evSel.length ? JSON.stringify({ ids: evSel }) : "none (the pipeline would refuse)";
+  $("evQuotes").innerHTML = quotes.map(q => q.verified ? `<div class="quote">[${q.source}] "${esc(q.text)}"</div>`
+    : `<div class="quote bad">ID ${esc(q.text)} does not exist: kept as unverified, never sent to the answer step</div>`).join("") || '<p class="where">No quotes.</p>';
+}
+$("evSources").addEventListener("click", e => { const d = e.target.closest("[data-id]"); if (!d) return; const id = d.dataset.id;
+  evSel = evSel.includes(id) ? evSel.filter(x => x !== id) : [...evSel, id]; renderEvidence(); });
+$("evSources").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset.id) { e.preventDefault(); e.target.click(); } });
+$("evInvent").addEventListener("click", () => { evSel = evSel.includes("3.9") ? evSel.filter(x => x !== "3.9") : [...evSel, "3.9"]; renderEvidence(); });
+renderEvidence();
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderGate);
+</script>

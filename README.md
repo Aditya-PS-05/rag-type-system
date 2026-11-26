@@ -95,6 +95,7 @@ Version history: [docs/versions.md](docs/versions.md) · Full results: [docs/eva
 ```
 scripts/download_dataset.py   dataset downloader (Wikipedia, arXiv, NASA)
 scripts/eraser_to_mermaid.py  diagram converter (.eraser → .mmd, README, viewer)
+scripts/build_site.py         builds the static docs site deployed to rag.adityaps.work
 rag/config.py                 settings from environment variables
 rag/loaders.py                text / PDF / image loaders and cleaning
 rag/chunking.py               paragraph-packing chunker with overlap
@@ -151,8 +152,12 @@ Planned fixes, in order: a larger labelled set (~150 questions) → a gate that 
 
 ## Documentation
 
+Live: **[rag.adityaps.work](https://rag.adityaps.work)**, with the [algorithm field guide](https://rag.adityaps.work/algorithms) and [architecture explorer](https://rag.adityaps.work/architecture). Rebuild and deploy with `python3 scripts/build_site.py && (cd site && vercel deploy --prod)`.
+
+
 | Doc | Contents |
 |---|---|
+| [algorithms.html](docs/algorithms.html) | Every algorithm explained in detail, with live demos (chunking, rank fusion, relevance threshold on real scores, evidence IDs, follow-up detection) |
 | [reading-guide.md](docs/reading-guide.md) | Where to start reading the code, in what order |
 | [versions.md](docs/versions.md) | V1 → V5: what changed, why, what it fixed, what it cost |
 | [how-it-works.md](docs/how-it-works.md) | Ingestion, storage schema, retrieval, answering, in detail |
