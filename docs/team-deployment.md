@@ -25,3 +25,5 @@ Shrink with `halfvec` (half the size), or truncate nomic vectors to 256-d (Matry
 ## Changing models
 - Embedding model: set `EMBED_MODEL`/`EMBED_DIM`, re-ingest. A different dimension needs a new `chunks` table.
 - Chat or reranker model: no re-ingest; re-run `rag.calibrate` (chat warns that the gate is stale) and `rag.eval`.
+
+For a full GPU-cluster plan (H100 model choices, placement, sizing, rollout), see [production.html](production.html) or https://rag.adityaps.work/production.

@@ -1,0 +1,410 @@
+<title>H100 Production Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: same system as the algorithm guide. Sticky section index, one reading column; plan tables, a cluster map, and two calculators whose assumptions are editable. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --sunk: #eceef3; --fg: #171c28; --muted: #5a6273; --line: #d8dce5;
+  --accent: #b5287a; --accent-soft: #f7e3ef; --ok: #23824f; --ok-soft: #e0f2e8; --warn: #a8640c; --warn-soft: #fbeedb;
+  --bad: #b8322f; --bad-soft: #fbe4e3; --blue: #2c66c4; --blue-soft: #e0eafa; --violet: #7148c0; --violet-soft: #ece4fa;
+  --display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --ok: #5ccb8d; --ok-soft: #13301f; --warn: #eaa75a; --warn-soft: #33240f;
+  --bad: #f07d79; --bad-soft: #3a1a19; --blue: #71a3f0; --blue-soft: #172742; --violet: #a98bec; --violet-soft: #271d40;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #181c25; --sunk: #0d1016; --fg: #e6e9f0; --muted: #98a0b0; --line: #2a303c;
+  --accent: #ec6bb5; --accent-soft: #3a1b2e; --ok: #5ccb8d; --ok-soft: #13301f; --warn: #eaa75a; --warn-soft: #33240f;
+  --bad: #f07d79; --bad-soft: #3a1a19; --blue: #71a3f0; --blue-soft: #172742; --violet: #a98bec; --violet-soft: #271d40;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.65 var(--body); }
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 900px) { .page { grid-template-columns: minmax(0, 1fr); gap: 20px; } .toc { position: static !important; columns: 2; } }
+.toc { position: sticky; top: calc(20px + env(safe-area-inset-top, 0px)); align-self: start; font-size: 13.5px; }
+.toc p { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
+.toc a { display: block; color: var(--fg); text-decoration: none; padding: 3px 8px; border-left: 2px solid transparent; break-inside: avoid; }
+.toc a:hover { border-left-color: var(--accent); color: var(--accent); }
+main { min-width: 0; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 10px; text-wrap: balance; }
+.lead { max-width: 70ch; color: var(--muted); margin: 0 0 10px; }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 1.5rem; letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance; }
+h3 { font: 600 12px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 22px 0 8px; }
+section > p, section li { max-width: 72ch; }
+.tablewrap { overflow-x: auto; margin: 8px 0; }
+table { border-collapse: collapse; font-size: 13.5px; width: 100%; min-width: 640px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.m { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td b { font-weight: 600; }
+.tag { display: inline-block; font: 600 10.5px var(--mono); padding: 1px 6px; border-radius: 4px; margin-left: 4px; vertical-align: 1px; }
+.tag.pick { background: var(--ok-soft); color: var(--ok); }
+.tag.alt { background: var(--sunk); color: var(--muted); }
+.callout { border-radius: 10px; padding: 12px 16px; max-width: 72ch; margin: 12px 0; font-size: 14.5px; }
+.callout.key { background: var(--accent-soft); }
+.callout.warn { background: var(--warn-soft); }
+.callout b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 2px; }
+.callout.key b { color: var(--accent); } .callout.warn b { color: var(--warn); }
+.map { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 12px 0; }
+.map svg { display: block; min-width: 880px; width: 100%; height: auto; }
+.nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 12px 0; }
+.node { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+.node h4 { margin: 0 0 8px; font: 600 13px var(--mono); display: flex; justify-content: space-between; }
+.gpus { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gpu { border-radius: 6px; padding: 6px; font-size: 11.5px; line-height: 1.3; min-height: 58px; border: 1px solid transparent; }
+.gpu i { display: block; font: 500 10px var(--mono); font-style: normal; opacity: .75; margin-bottom: 2px; }
+.g-answer { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.g-check { background: var(--violet-soft); border-color: color-mix(in srgb, var(--violet) 30%, transparent); }
+.g-retr { background: var(--blue-soft); border-color: color-mix(in srgb, var(--blue) 30%, transparent); }
+.g-ingest { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.g-spare { background: var(--sunk); border-color: var(--line); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin: 14px 0; max-width: 900px; }
+.calc-head { padding: 9px 14px; border-bottom: 1px solid var(--line); font: 600 11px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.calc-body { padding: 14px; display: grid; gap: 14px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+.fields label { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.fields input, .fields select { font: 13.5px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); color: var(--fg); width: 100%; }
+.results { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.res { background: var(--sunk); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
+.res b { display: block; font: 600 1.2rem var(--display); color: var(--fg); font-variant-numeric: tabular-nums; }
+.res.bad b { color: var(--bad); } .res.ok b { color: var(--ok); }
+.bar { height: 22px; border-radius: 6px; overflow: hidden; display: flex; background: var(--sunk); font: 500 10.5px var(--mono); }
+.bar span { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; color: var(--fg); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+ol.phases { padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: ph; max-width: 820px; }
+ol.phases li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 12px 52px; position: relative; counter-increment: ph; }
+ol.phases li::before { content: counter(ph); position: absolute; left: 14px; top: 12px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--surface); font: 600 13px var(--mono); display: grid; place-items: center; }
+ol.phases b { display: block; }
+ol.phases .exit { font-size: 13px; color: var(--muted); }
+footer { margin-top: 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Sections">
+  <p>Blueprint</p>
+  <a href="#why">What changes on H100</a>
+  <a href="#models">Model choices</a>
+  <a href="#map">Cluster architecture</a>
+  <a href="#placement">GPU placement</a>
+  <a href="#memory">Memory planner</a>
+  <a href="#latency">Latency budget</a>
+  <a href="#code">Code changes</a>
+  <a href="#data">Data layer</a>
+  <a href="#ops">Operations and SLOs</a>
+  <a href="#rollout">Rollout plan</a>
+</nav>
+
+<main>
+<header>
+  <h1>H100 Production Blueprint</h1>
+  <p class="lead">How to take the grounded RAG chatbot (V4.3: hybrid retrieval, calibrated relevance gate, evidence by sentence ID, verification cascade) from one laptop to a multi-GPU H100 cluster. The pipeline and its safety rules stay the same; the models, serving layer and data layer change.</p>
+  <p class="lead">Reference cluster: <b>2 nodes × 8 H100 80 GB SXM</b> (16 GPUs, NVLink inside a node). Where this page gives speeds, they are planning estimates to confirm with a load test, and the calculators let you change every assumption.</p>
+</header>
+
+<section id="why">
+  <h2>What changes on H100</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Laptop today (M5, 16 GB)</th><th>H100 cluster</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td>Prompt reading</td><td class="m">~600 tok/s (measured)</td><td class="m">tens of thousands tok/s</td><td>The 2,000-token evidence prompt stops being the bottleneck; the top-6 source cut can go back to 8–10.</td></tr>
+      <tr><td>Writing</td><td class="m">~40 tok/s (measured)</td><td class="m">~50–150 tok/s per stream</td><td>Per-stream speed improves less than reading. Throughput comes from batching many users at once.</td></tr>
+      <tr><td>Memory for models</td><td class="m">~4 GB to spare</td><td class="m">80 GB per GPU</td><td>30–70B models fit on 1–2 GPUs in FP8; the 4B limit disappears.</td></tr>
+      <tr><td>Concurrency</td><td class="m">1 question at a time</td><td class="m">hundreds of sequences per replica</td><td>The web server's single lock is replaced by continuous batching in the model server.</td></tr>
+      <tr><td>Same model as answerer and checker</td><td>forced by memory</td><td>optional</td><td>Use a different model family to check claims, so the checker doesn't share the answerer's blind spots.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout key"><b>The principle</b>On the laptop every model call was expensive, so the design minimized them. On H100, spend the extra capacity on accuracy: a stronger answer model, an independent checker, more evidence per question, and image understanding at ingest.</div>
+</section>
+
+<section id="models">
+  <h2>Model choices</h2>
+  <p>All open weights with licenses that allow commercial use; check each model card before shipping. "Pick" is the recommendation for this workload; the alternatives are worth an A/B on the evaluation set.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Role</th><th>Today</th><th>Production choice</th><th>Why</th><th>GPUs per replica</th></tr></thead>
+    <tbody>
+      <tr><td><b>Answer + evidence selection</b></td><td class="m">qwen3:4b-instruct</td>
+        <td><b>Qwen3-32B</b> (FP8)<span class="tag pick">pick</span><br>Qwen3-30B-A3B-Instruct-2507<span class="tag alt">faster</span><br>Llama 3.3 70B Instruct<span class="tag alt">larger</span></td>
+        <td>Same family as today, so prompts and the 47-question calibration carry over with the fewest surprises. A dense 32B is much better than 4B at multi-part questions and at keeping one fact per sentence, which are today's failure modes. The 30B-A3B mixture-of-experts activates only ~3B parameters per token, so it is several times faster per request; worth it if latency matters more than the last bit of accuracy.</td>
+        <td class="m">1 (FP8)<br>1<br>2 (FP8, TP2)</td></tr>
+      <tr><td><b>Claim checker</b></td><td class="m">same 4B model</td>
+        <td><b>gpt-oss-120b</b><span class="tag pick">pick</span><br>Llama 3.3 70B Instruct<span class="tag alt">alt</span></td>
+        <td>A different model family from the answerer, so their mistakes are less correlated. That is the weakness listed in the README. gpt-oss-120b is a mixture-of-experts reasoning model whose MXFP4 weights fit on a single 80 GB GPU; run it at low reasoning effort for speed.</td>
+        <td class="m">1<br>2 (FP8, TP2)</td></tr>
+      <tr><td><b>Follow-up rewrite</b></td><td class="m">same 4B model</td>
+        <td><b>Qwen3-4B-Instruct-2507</b><span class="tag pick">pick</span></td>
+        <td>A small, easy task. Keeping a small model here keeps it off the big model's queue. It shares a GPU slice with the retrieval models.</td>
+        <td class="m">MIG slice</td></tr>
+      <tr><td><b>Embeddings</b></td><td class="m">nomic-embed-text (768-d)</td>
+        <td><b>Qwen3-Embedding-4B</b>, output truncated to 1024-d<span class="tag pick">pick</span><br>BGE-M3<span class="tag alt">multilingual, dense + sparse</span></td>
+        <td>Stronger retrieval than nomic and a long input window. Its vectors can be shortened (Matryoshka-style), so 1024 dimensions keep the index size reasonable. BGE-M3 is the choice if documents are multilingual, and its sparse output can replace Postgres keyword search. Changing the embedder means re-embedding the whole corpus.</td>
+        <td class="m">MIG slice / 1</td></tr>
+      <tr><td><b>Reranker</b></td><td class="m">jina-reranker-v1-turbo (CPU)</td>
+        <td><b>Qwen3-Reranker-4B</b><span class="tag pick">pick</span><br>bge-reranker-v2-m3<span class="tag alt">smaller</span></td>
+        <td>On GPU, a 4B cross-encoder scores 24–50 candidates in tens of milliseconds, so the rerank pool can grow from 24. The gate threshold must be recalibrated; reranker scores are not comparable across models.</td>
+        <td class="m">MIG slice / 1</td></tr>
+      <tr><td><b>Image understanding</b></td><td>caption text only</td>
+        <td><b>Qwen2.5-VL-7B</b> (or a newer Qwen-VL) at ingest<span class="tag pick">pick</span></td>
+        <td>Generates a detailed description of every image's pixels, stored next to NASA's caption, so images without good metadata become searchable. It runs only at ingest, in batch.</td>
+        <td class="m">1 (ingest pool)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn"><b>Every change resets the numbers</b>The gate threshold (0.423), the evidence and answer prompts and the 47/47 score were all measured with today's models. Each model swap must re-run <code>rag.calibrate</code> and <code>rag.eval</code>, and the evaluation set should grow to a few hundred labelled questions before production (see the rollout plan).</div>
+</section>
+
+<section id="map">
+  <h2>Cluster architecture</h2>
+  <div class="map"><svg viewBox="0 0 980 520" role="img" aria-label="Clients through gateway to a stateless RAG API on CPU, which calls GPU model pools and a data layer; ingestion and observability on the side">
+    <g font-family="IBM Plex Sans, sans-serif" font-size="12" id="mapSvg"></g>
+  </svg></div>
+  <ul>
+    <li><b>The RAG API is stateless and runs on CPU.</b> It runs today's <code>ask()</code> pipeline, rewritten as async, and only coordinates: every heavy step is a network call to a model pool or the database. Scale it on request rate.</li>
+    <li><b>Each model is its own pool</b> of replicas behind a load balancer: vLLM for chat models, Hugging Face Text Embeddings Inference (TEI) for the embedder and reranker. Pools scale independently on queue depth.</li>
+    <li><b>Ingestion is a separate path</b> driven by a queue, so a 10 GB upload never competes with users for answer GPUs.</li>
+  </ul>
+</section>
+
+<section id="placement">
+  <h2>GPU placement (2 × 8 H100)</h2>
+  <div class="legend"><span><i class="g-answer"></i>answer model</span><span><i class="g-check"></i>checker</span><span><i class="g-retr"></i>embed / rerank / rewrite</span><span><i class="g-ingest"></i>ingest (scales to zero)</span><span><i class="g-spare"></i>headroom / canary</span></div>
+  <div class="nodes" id="nodes"></div>
+  <ul>
+    <li><b>Answer replicas are spread over both nodes,</b> so losing a node halves capacity instead of causing an outage.</li>
+    <li><b>MIG</b> splits one H100 into up to 7 isolated slices. The query-time embedder, reranker and small rewrite model don't need a whole GPU each.</li>
+    <li><b>Ingest GPUs scale to zero</b> when the queue is empty and are borrowed for answer replicas at peak.</li>
+    <li>If one model needs more than one GPU (Llama 70B, or Qwen3-235B for a premium tier), keep its tensor-parallel group <b>inside one node</b>. NVLink between those GPUs is far faster than the network between nodes.</li>
+  </ul>
+</section>
+
+<section id="memory">
+  <h2>Memory planner</h2>
+  <p>A replica's GPU memory holds the weights plus the <b>KV cache</b>, the attention state for every token of every active request. The KV cache decides how many questions one replica can serve at once.</p>
+  <div class="calc">
+    <div class="calc-head">Plan a replica · architecture values are approximate, from public model configs</div>
+    <div class="calc-body">
+      <div class="fields">
+        <label>Model<select id="mModel"></select></label>
+        <label>Weight precision<select id="mPrec"><option value="2">BF16 (2 bytes)</option><option value="1" selected>FP8 (1 byte)</option><option value="0.5">4-bit (0.5 bytes)</option></select></label>
+        <label>KV-cache precision<select id="mKv"><option value="2">BF16</option><option value="1" selected>FP8</option></select></label>
+        <label>GPUs per replica (tensor parallel)<select id="mTp"><option>1</option><option>2</option><option>4</option><option>8</option></select></label>
+        <label>Tokens per request (prompt + answer)<input type="number" id="mCtx" value="4096" min="256" step="256"></label>
+        <label>GPU memory used by the server<input type="number" id="mUtil" value="0.90" min="0.5" max="0.98" step="0.01"></label>
+      </div>
+      <div class="bar" id="mBar" aria-label="Memory split per GPU"></div>
+      <div class="results" id="mOut"></div>
+      <p class="note">KV bytes per token = 2 (key and value) × layers × KV heads × head dim × KV bytes. Free KV memory = 80 GB × utilization − weights ÷ GPUs − ~4 GB runtime overhead, summed over the replica's GPUs. Concurrent requests = free KV ÷ (KV per token × tokens per request). Ignores prefix sharing, which raises real concurrency for this workload (every request shares the same system prompts).</p>
+    </div>
+  </div>
+</section>
+
+<section id="latency">
+  <h2>Latency budget</h2>
+  <p>A checked answer is still a chain of model calls. On H100 each call is fast, but the chain adds up, so this budget decides whether to stream drafts, which calls can run in parallel, and where a faster model pays off.</p>
+  <div class="calc">
+    <div class="calc-head">Estimate one answer · defaults are planning assumptions; replace them with load-test numbers</div>
+    <div class="calc-body">
+      <div class="fields">
+        <label>Big model prompt reading (tok/s)<input type="number" id="lPre" value="8000" step="500"></label>
+        <label>Big model writing per stream (tok/s)<input type="number" id="lDec" value="60" step="5"></label>
+        <label>Checker writing per stream (tok/s)<input type="number" id="lChk" value="120" step="10"></label>
+        <label>Retrieval: embed + search + rerank (ms)<input type="number" id="lRet" value="120" step="10"></label>
+        <label>Evidence prompt (tokens)<input type="number" id="lEvTok" value="3500" step="100"></label>
+        <label>Answer length (tokens)<input type="number" id="lAns" value="150" step="10"></label>
+        <label>Rewrite needed<select id="lRw"><option value="1">yes (follow-up)</option><option value="0" selected>no</option></select></label>
+        <label>Network + queueing per call (ms)<input type="number" id="lNet" value="25" step="5"></label>
+      </div>
+      <div class="bar" id="lBar" aria-label="Time per stage"></div>
+      <div class="results" id="lOut"></div>
+      <p class="note">Evidence = evidence prompt ÷ reading speed + 30 ID tokens ÷ writing speed. Answer = ~800 quote tokens ÷ reading + answer ÷ writing. Check = ~1,000 tokens ÷ reading + ~15 tokens per sentence ÷ checker writing. Rewrite = small model, ~150 ms. Laptop today: 8–16 s per new question, measured.</p>
+    </div>
+  </div>
+  <div class="callout key"><b>Where the time goes on H100</b>Writing the answer dominates once reading is fast. Stream the draft immediately (already built), and run the fact check sentence by sentence while the answer is still being written. The answer then looks ready about when its last word appears.</div>
+</section>
+
+<section id="code">
+  <h2>Code changes from V4.3</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Area</th><th>Today</th><th>Production</th></tr></thead>
+    <tbody>
+      <tr><td>Model client <code>rag/ollama.py</code></td><td>Ollama HTTP, one process</td><td>OpenAI-compatible client for vLLM (<code>/v1/chat/completions</code>; JSON schemas through structured outputs). TEI <code>/embed</code> and <code>/rerank</code>. Separate endpoints for the answer, checker and rewrite models. Timeouts, retries, circuit breakers.</td></tr>
+      <tr><td>Pipeline <code>rag/qa.py</code></td><td>synchronous, sequential</td><td>async (<code>httpx.AsyncClient</code>); vector and keyword search in parallel; per-sentence checking overlapped with answer streaming; the same safety rules and tests.</td></tr>
+      <tr><td>Server <code>rag/web.py</code></td><td>standard-library server, one lock</td><td>FastAPI behind a gateway, streaming over SSE, OIDC login, per-user rate limits, team taken from the token rather than an environment variable.</td></tr>
+      <tr><td>Database access <code>rag/store.py</code></td><td>one connection</td><td>connection pool (psycopg_pool) behind PgBouncer; reads go to replicas; Postgres row-level security enforces the team filter in the database as well as in queries.</td></tr>
+      <tr><td>Ingest <code>rag/ingest.py</code></td><td>one process, one document at a time</td><td>queue-driven workers; GPU batch embedding; <code>COPY</code> bulk inserts; image captions from the vision model; idempotent by the existing content hash.</td></tr>
+      <tr><td>Calibration</td><td><code>calibration.json</code> in the repo</td><td>stored per team and model version in the database; the API refuses to serve a team whose calibration is stale instead of only warning.</td></tr>
+      <tr><td>Caching</td><td>none</td><td>query-embedding cache; answer cache keyed by (question, corpus fingerprint, model versions); prefix caching in vLLM for the long shared system prompts.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="data">
+  <h2>Data layer</h2>
+  <ul>
+    <li><b>Vectors:</b> stay on Postgres + pgvector up to roughly 10M chunks: store <code>halfvec</code> (16-bit), keep the HNSW index in RAM, one primary plus read replicas. Beyond about 50M chunks, move vectors to a dedicated engine (Qdrant or Milvus) with quantization and sharding. The decision is already recorded in <code>docs/decisions.md</code>.</li>
+    <li><b>Keyword search:</b> replace the OR-ed <code>ts_rank_cd</code> query, which slows down on common words at scale, with a BM25 index: ParadeDB <code>pg_search</code> inside Postgres, or OpenSearch. With BGE-M3, its sparse vectors can do this job instead.</li>
+    <li><b>Raw files:</b> S3-compatible object storage; Postgres keeps only text, metadata and vectors.</li>
+    <li><b>Backups and disaster recovery:</b> point-in-time recovery for Postgres; vectors can always be rebuilt from object storage plus the embedding model, so a model's vectors are reproducible.</li>
+  </ul>
+</section>
+
+<section id="ops">
+  <h2>Operations and SLOs</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Signal</th><th>Target to start with</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Time to first draft token, p95</td><td class="m">&lt; 1.5 s</td><td>API traces (OpenTelemetry)</td></tr>
+      <tr><td>Checked answer complete, p95</td><td class="m">&lt; 6 s</td><td>API traces</td></tr>
+      <tr><td>Evaluation score on the release set</td><td class="m">no drop vs last release</td><td>CI evaluation gate</td></tr>
+      <tr><td>Real questions refused by the gate (held out)</td><td class="m">≤ 1%</td><td>calibration report</td></tr>
+      <tr><td>Sentences removed per answer</td><td class="m">watch the trend</td><td>pipeline metrics; a jump means the answer model drifted</td></tr>
+      <tr><td>GPU memory and KV-cache use, queue depth</td><td class="m">KV &lt; 90%, queue &lt; 2 s</td><td>vLLM and DCGM metrics in Prometheus</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>Kubernetes</b> with the NVIDIA GPU Operator (drivers, MIG, DCGM metrics). Model servers autoscale on queue depth (KEDA); the API autoscales on request rate.</li>
+    <li><b>LLM tracing</b> (for example Langfuse) records each answer's evidence IDs, verdicts and removed sentences, so a user's report can be replayed exactly.</li>
+    <li><b>Model weights</b> are pinned by version and hash and pulled from an internal registry, not the internet, so every node runs the same model and a release is reproducible.</li>
+    <li><b>Canary releases:</b> a new model or prompt first serves a small share of traffic on the spare GPUs, with automatic rollback if the evaluation gate or the SLOs regress.</li>
+  </ul>
+</section>
+
+<section id="rollout">
+  <h2>Rollout plan</h2>
+  <ol class="phases">
+    <li><b>Grow the evaluation set.</b> 47 questions → 300+, written from real users' questions, with a held-out split never used for tuning. Add multi-part and multi-turn cases, since they are today's weakest area.<div class="exit">Exit: the set covers every document type and failure mode in docs/hallucination.md.</div></li>
+    <li><b>Abstract the model client.</b> Make <code>rag/ollama.py</code> an interface with Ollama and OpenAI-compatible backends, and switch the pipeline to async. Laptop mode keeps working.<div class="exit">Exit: all unit tests and the full evaluation pass unchanged on the laptop.</div></li>
+    <li><b>Single-node staging (1 × 8 H100).</b> vLLM + TEI, today's models first, so infrastructure problems aren't mixed up with model changes.<div class="exit">Exit: same evaluation score; latency and throughput measured; the calculators above filled in with real numbers.</div></li>
+    <li><b>Model upgrades, one at a time.</b> Embedder and reranker (re-ingest, recalibrate), then the answer model, then the independent checker. Run the evaluation and calibration after each.<div class="exit">Exit: each swap keeps or improves the score, with no rise in wrongly refused real questions.</div></li>
+    <li><b>Cluster, security, scale.</b> Second node, autoscaling, login and row-level security, BM25, load test at 2× expected peak, failover drill (kill a node mid-test).<div class="exit">Exit: SLOs hold at 2× peak and through a node loss.</div></li>
+    <li><b>Production with guardrails.</b> Canary releases, evaluation as a CI gate, weekly recalibration on new labelled questions, on-call runbooks.<div class="exit">Exit: two weeks inside SLO, then widen access.</div></li>
+  </ol>
+</section>
+
+<footer>Part of the rag-type-system documentation. Current pipeline: <a href="/algorithms">algorithm guide</a> · <a href="/architecture">architecture explorer</a>. Model names and capabilities reflect public releases as of mid-2026; verify licenses and the latest versions before adopting.</footer>
+</main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ---------- architecture map ---------- */
+(function map() {
+  const box = (x, y, w, h, title, sub, fill, stroke) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="1.3"></rect>
+    <text x="${x + 10}" y="${y + 20}" font-weight="600" fill="var(--fg)">${title}</text>${sub.map((s, i) => `<text x="${x + 10}" y="${y + 38 + i * 15}" font-size="11" fill="var(--muted)">${s}</text>`).join("")}`;
+  const arrow = (x1, y1, x2, y2, label = "") => `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#ah)"></path>${label ? `<text x="${(x1 + x2) / 2 + 4}" y="${(y1 + y2) / 2 - 4}" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${label}</text>` : ""}`;
+  let s = `<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"></path></marker></defs>`;
+  s += box(20, 20, 150, 60, "Clients", ["web app, team apps"], "var(--surface)", "var(--line)");
+  s += box(210, 20, 170, 60, "Gateway", ["TLS, OIDC login, rate limits"], "var(--surface)", "var(--line)");
+  s += box(420, 10, 230, 80, "RAG API (CPU, stateless)", ["async ask(): rewrite → retrieve → gate", "→ evidence → answer → verify", "streams SSE · autoscaled"], "var(--accent-soft)", "var(--accent)");
+  s += arrow(170, 50, 208, 50) + arrow(380, 50, 418, 50);
+  // GPU pools
+  s += `<text x="20" y="140" font-size="11" font-weight="600" fill="var(--muted)" letter-spacing="1">GPU MODEL POOLS</text>`;
+  s += box(20, 150, 220, 75, "Answer model · vLLM", ["Qwen3-32B FP8 · 6 replicas", "evidence IDs + answers"], "var(--accent-soft)", "var(--accent)");
+  s += box(255, 150, 200, 75, "Checker · vLLM", ["gpt-oss-120b · 2 replicas", "batched claim verdicts"], "var(--violet-soft)", "var(--violet)");
+  s += box(470, 150, 220, 75, "Retrieval models · TEI", ["Qwen3-Embedding-4B", "Qwen3-Reranker-4B", "+ Qwen3-4B rewrite (MIG)"], "var(--blue-soft)", "var(--blue)");
+  s += arrow(470, 90, 140, 148) + arrow(510, 90, 360, 148) + arrow(560, 90, 580, 148);
+  // data
+  s += `<text x="20" y="270" font-size="11" font-weight="600" fill="var(--muted)" letter-spacing="1">DATA LAYER</text>`;
+  s += box(20, 280, 250, 75, "Postgres + pgvector", ["primary + read replicas, halfvec HNSW", "row-level security per team"], "var(--surface)", "var(--line)");
+  s += box(285, 280, 190, 75, "BM25 keyword index", ["pg_search or OpenSearch"], "var(--surface)", "var(--line)");
+  s += box(490, 280, 200, 75, "Object storage", ["raw PDFs, images, text"], "var(--surface)", "var(--line)");
+  const bus = "var(--muted)";
+  s += `<path d="M650 60 H710 V258 H145" stroke="${bus}" stroke-width="1.4" fill="none"></path>`;
+  [145, 380, 590].forEach(x => { s += `<path d="M${x} 258 V276" stroke="${bus}" stroke-width="1.4" fill="none" marker-end="url(#ah)"></path>`; });
+  s += `<text x="300" y="252" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Mono, monospace">search · neighbours · calibration</text>`;
+  // ingest
+  s += box(730, 150, 230, 120, "Ingestion path", ["upload → queue (Kafka / SQS)", "workers: load, clean, chunk", "GPU batch embed (TEI)", "Qwen2.5-VL image captions", "COPY into Postgres"], "var(--ok-soft)", "var(--ok)");
+  s += `<path d="M730 230 H710" stroke="var(--ok)" stroke-width="1.4" fill="none"></path><text x="736" y="290" font-size="10.5" fill="var(--muted)" font-family="IBM Plex Mono, monospace">writes chunks, vectors, files</text>`;
+  // ops
+  s += box(730, 10, 230, 120, "Observability", ["Prometheus + DCGM GPU metrics", "OpenTelemetry traces", "LLM traces (evidence, verdicts)", "eval gate in CI · canary"], "var(--surface)", "var(--line)");
+  s += `<text x="20" y="400" font-size="11" font-weight="600" fill="var(--muted)" letter-spacing="1">PER QUESTION</text>`;
+  const steps = [["rewrite", "small model"], ["embed + search", "TEI + Postgres"], ["rerank + gate", "TEI · calibrated"], ["evidence IDs", "answer model"], ["answer (stream)", "answer model"], ["verify", "exact → checker"]];
+  steps.forEach(([a, b], i) => { const x = 20 + i * 157; s += box(x, 410, 140, 52, a, [b], "var(--surface)", "var(--line)"); if (i < steps.length - 1) s += arrow(x + 140, 436, x + 155, 436); });
+  s += `<text x="20" y="495" font-size="11.5" fill="var(--muted)">Safety rules unchanged from V4.3: gate before any LLM call, quotes looked up by code, every sentence checked, unsupported sentences removed.</text>`;
+  $("mapSvg").innerHTML = s;
+})();
+
+/* ---------- GPU placement ---------- */
+(function placement() {
+  const n1 = [["answer", "Qwen3-32B FP8", "replica 1"], ["answer", "Qwen3-32B FP8", "replica 2"], ["answer", "Qwen3-32B FP8", "replica 3"], ["check", "gpt-oss-120b", "checker 1"],
+              ["retr", "MIG: embed · rerank · rewrite", "query-time"], ["ingest", "TEI batch embed", "scales to zero"], ["ingest", "Qwen2.5-VL", "image captions"], ["spare", "headroom", "canary"]];
+  const n2 = [["answer", "Qwen3-32B FP8", "replica 4"], ["answer", "Qwen3-32B FP8", "replica 5"], ["answer", "Qwen3-32B FP8", "replica 6"], ["check", "gpt-oss-120b", "checker 2"],
+              ["retr", "MIG: embed · rerank · rewrite", "query-time"], ["retr", "Qwen3-Reranker-4B", "full GPU at peak"], ["ingest", "TEI batch embed", "scales to zero"], ["spare", "headroom", "canary"]];
+  const node = (name, gpus) => `<div class="node"><h4><span>${name}</span><span>8 × H100 80 GB</span></h4><div class="gpus">${gpus.map(([k, m, r], i) =>
+    `<div class="gpu g-${k}"><i>GPU ${i}</i>${m}<br><span style="opacity:.75">${r}</span></div>`).join("")}</div></div>`;
+  $("nodes").innerHTML = node("node-a", n1) + node("node-b", n2);
+})();
+
+/* ---------- memory planner ---------- */
+const MODELS = {
+  "Qwen3-32B": { p: 32.8, L: 64, kv: 8, hd: 128 },
+  "Qwen3-30B-A3B-Instruct-2507": { p: 30.5, L: 48, kv: 4, hd: 128 },
+  "Qwen3-4B-Instruct-2507": { p: 4.0, L: 36, kv: 8, hd: 128 },
+  "Llama-3.3-70B-Instruct": { p: 70.6, L: 80, kv: 8, hd: 128 },
+  "Qwen3-235B-A22B-Instruct-2507": { p: 235, L: 94, kv: 4, hd: 128 },
+};
+$("mModel").innerHTML = Object.keys(MODELS).map(k => `<option>${k}</option>`).join("");
+const GB = 1e9;
+function plan() {
+  const m = MODELS[$("mModel").value], prec = +$("mPrec").value, kvb = +$("mKv").value, tp = +$("mTp").value;
+  const ctx = Math.max(256, +$("mCtx").value || 4096), util = Math.min(0.98, Math.max(0.5, +$("mUtil").value || 0.9));
+  const weightsPerGpu = m.p * 1e9 * prec / tp / GB;
+  const budgetPerGpu = 80 * util;
+  const overhead = 4;
+  const kvPerGpu = budgetPerGpu - weightsPerGpu - overhead;
+  const kvPerToken = 2 * m.L * m.kv * m.hd * kvb;
+  const kvTotal = Math.max(0, kvPerGpu) * tp * GB;
+  const tokens = kvTotal / kvPerToken, seqs = Math.floor(tokens / ctx);
+  const fits = kvPerGpu > 1;
+  const pct = v => Math.max(0, v / 80 * 100);
+  $("mBar").innerHTML = fits
+    ? `<span style="width:${pct(weightsPerGpu)}%;background:var(--accent-soft)">weights ${weightsPerGpu.toFixed(1)} GB</span><span style="width:${pct(overhead)}%;background:var(--warn-soft)">runtime</span><span style="width:${pct(kvPerGpu)}%;background:var(--ok-soft)">KV cache ${kvPerGpu.toFixed(1)} GB</span><span style="width:${pct(80 - budgetPerGpu)}%;">reserve</span>`
+    : `<span style="width:100%;background:var(--bad-soft)">weights ${weightsPerGpu.toFixed(1)} GB per GPU: does not fit, add GPUs or lower precision</span>`;
+  $("mOut").innerHTML = [
+    ["Weights per GPU", `${weightsPerGpu.toFixed(1)} GB`, ""],
+    ["KV per token", `${(kvPerToken / 1024).toFixed(0)} KB`, ""],
+    ["KV-cache capacity", fits ? `${(tokens / 1000).toFixed(0)}k tokens` : "none", fits ? "" : "bad"],
+    ["Concurrent requests", fits ? `${seqs.toLocaleString()}` : "0", fits ? (seqs >= 16 ? "ok" : "bad") : "bad"],
+    ["GPUs per replica", `${tp}`, ""],
+  ].map(([l, v, c]) => `<div class="res ${c}"><b>${v}</b>${l}</div>`).join("");
+}
+["mModel", "mPrec", "mKv", "mTp", "mCtx", "mUtil"].forEach(id => $(id).addEventListener("input", plan));
+$("mModel").addEventListener("change", () => { $("mTp").value = { "Llama-3.3-70B-Instruct": "2", "Qwen3-235B-A22B-Instruct-2507": "4" }[$("mModel").value] || "1"; plan(); });
+plan();
+
+/* ---------- latency budget ---------- */
+function latency() {
+  const pre = Math.max(1, +$("lPre").value), dec = Math.max(1, +$("lDec").value), chk = Math.max(1, +$("lChk").value);
+  const net = (+$("lNet").value || 0) / 1000, sentences = Math.max(1, Math.round((+$("lAns").value || 150) / 35));
+  const parts = [
+    ["rewrite", +$("lRw").value ? 0.15 + net : 0, "var(--sunk)"],
+    ["retrieve + gate", (+$("lRet").value || 0) / 1000 + net, "var(--blue-soft)"],
+    ["evidence", (+$("lEvTok").value || 0) / pre + 30 / dec + net, "var(--ok-soft)"],
+    ["answer", 800 / pre + (+$("lAns").value || 0) / dec + net, "var(--accent-soft)"],
+    ["check", 1000 / pre + sentences * 15 / chk + net, "var(--violet-soft)"],
+  ];
+  const total = parts.reduce((a, p) => a + p[1], 0);
+  const firstToken = parts.slice(0, 3).reduce((a, p) => a + p[1], 0) + 800 / pre;
+  $("lBar").innerHTML = parts.filter(p => p[1] > 0).map(([n, t, c]) => `<span style="width:${t / total * 100}%;background:${c}" title="${n} ${t.toFixed(2)} s">${t / total > 0.09 ? `${n} ${t.toFixed(2)}s` : ""}</span>`).join("");
+  $("lOut").innerHTML = [
+    ["first draft token", `${firstToken.toFixed(2)} s`, firstToken < 1.5 ? "ok" : "bad"],
+    ["checked answer", `${total.toFixed(2)} s`, total < 6 ? "ok" : "bad"],
+    ["laptop today (measured)", "8–16 s", ""],
+  ].map(([l, v, c]) => `<div class="res ${c}"><b>${v}</b>${l}</div>`).join("");
+}
+["lPre", "lDec", "lChk", "lRet", "lEvTok", "lAns", "lRw", "lNet"].forEach(id => $(id).addEventListener("input", latency));
+latency();
+</script>

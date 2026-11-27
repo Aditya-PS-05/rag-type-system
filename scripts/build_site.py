@@ -19,6 +19,7 @@ REPO = "https://github.com/Aditya-PS-05/rag-type-system"
 PAGES = {
     "algorithms.html": ("docs/algorithms.html", "Every algorithm in the pipeline, with live demos."),
     "architecture.html": ("docs/architecture/viewer.html", "Interactive architecture diagrams, V1 to V5."),
+    "production.html": ("docs/production.html", "Taking the pipeline to a multi-GPU H100 cluster: models, placement, sizing, rollout."),
 }
 
 HEAD = """<!doctype html>
@@ -55,6 +56,7 @@ a { color: var(--accent); }
   <div class="cards">
     <a class="card" href="/algorithms"><b>Algorithm field guide</b><span>Chunking, HNSW, reciprocal rank fusion, reranking, the calibrated relevance gate, evidence by sentence ID and the verification cascade, with live demos on real evaluation data.</span></a>
     <a class="card" href="/architecture"><b>Architecture explorer</b><span>Each version from basic RAG to the current pipeline as an interactive flowchart. Click a box to trace what flows in and out.</span></a>
+    <a class="card" href="/production"><b>H100 production blueprint</b><span>Model choices for a GPU cluster, GPU placement on 2 × 8 H100, a memory planner and latency budget, code changes and the rollout plan.</span></a>
     <a class="card" href="{repo}"><b>Source code</b><span>Python, Postgres + pgvector, Ollama. Evaluation: 47/47 on the current question set.</span></a>
   </div>
   <p class="facts">The chatbot itself runs locally (it needs Ollama and Postgres on your machine); see the README to run it.</p>

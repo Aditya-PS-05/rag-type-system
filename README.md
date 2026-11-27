@@ -152,11 +152,12 @@ Planned fixes, in order: a larger labelled set (~150 questions) → a gate that 
 
 ## Documentation
 
-Live: **[rag.adityaps.work](https://rag.adityaps.work)**, with the [algorithm field guide](https://rag.adityaps.work/algorithms) and [architecture explorer](https://rag.adityaps.work/architecture). Rebuild and deploy with `python3 scripts/build_site.py && (cd site && vercel deploy --prod)`.
+Live: **[rag.adityaps.work](https://rag.adityaps.work)**, with the [algorithm field guide](https://rag.adityaps.work/algorithms), [architecture explorer](https://rag.adityaps.work/architecture) and [H100 production blueprint](https://rag.adityaps.work/production). Rebuild and deploy with `python3 scripts/build_site.py && (cd site && vercel deploy --prod)`.
 
 
 | Doc | Contents |
 |---|---|
+| [production.html](docs/production.html) | Taking the pipeline to a multi-GPU H100 cluster: model choices, GPU placement, memory planner, latency budget, code changes, rollout plan |
 | [algorithms.html](docs/algorithms.html) | Every algorithm explained in detail, with live demos (chunking, rank fusion, relevance threshold on real scores, evidence IDs, follow-up detection) |
 | [reading-guide.md](docs/reading-guide.md) | Where to start reading the code, in what order |
 | [versions.md](docs/versions.md) | V1 → V5: what changed, why, what it fixed, what it cost |
